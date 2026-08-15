@@ -377,6 +377,7 @@
 <script>
 const $ = id => document.getElementById(id);
 let selectedFiles = [];       // single-mode staged clip names
+let currentUploadFiles = [];  // File objects for the current staged set (for retry)
 let batchCards = [];          // [{title, script, files:[File]}]
 let currentJob = null;
 let pollTimer = null;
@@ -807,6 +808,7 @@ drop.ondrop = e => { e.preventDefault(); drop.classList.remove('drag'); input.fi
 input.onchange = () => uploadFiles(input.files);
 
 function renderFileCards(files){
+  currentUploadFiles = files;
   const box = $('fileList');
   if(!files.length){ box.innerHTML=''; return; }
   // Build the list ONCE. Videos use a light icon (decoding 71 video thumbs froze the
@@ -828,6 +830,7 @@ function renderFileCards(files){
         <div class="bar" style="height:6px;margin-top:4px"><div class="fbar" style="width:0%;background:#1f6feb"></div></div>
       </div>
       <span class="fstate" style="flex:0 0 auto;font-size:12px;color:#8b949e">queued</span>
+      <button class="fretry" data-i="${i}" onclick="retryFile(${i})" style="display:none;margin-left:8px;padding:4px 12px;font-size:12px;background:#8f2a2a;border:0;border-radius:6px;color:#fff;cursor:pointer">↻ Retry</button>
     </div>`;
   }).join('');
 }
@@ -838,6 +841,13 @@ function updateCard(i, pct, state, ok, err){
   const st = card.querySelector('.fstate');
   if(bar) bar.style.width = (pct||0)+'%';
   if(st){ st.textContent = state; st.style.color = err ? '#f85149' : (ok ? '#56d364' : '#8b949e'); }
+  const rt = card.querySelector('.fretry');
+  if(rt) rt.style.display = err ? 'inline-block' : 'none';
+}
+function retryFile(i){
+  const f = currentUploadFiles[i];
+  if(!f){ $('statusMsg').textContent='No file to retry.'; return; }
+  uploadOne(i, 0, true);
 }
 
 function uploadFiles(fileList){
@@ -846,39 +856,53 @@ function uploadFiles(fileList){
   files.forEach(f=>{ f.__done=false; f.__err=false; });
   $('uploadProgressWrap').style.display='';
   renderFileCards(files);
-  const names=[]; let uploaded=0; const total=files.length;
+  let doneCount=0; const total=files.length;
   const totalBytes = files.reduce((a,f)=>a+(f.size||0),0);
   let loadedBytes = 0; const fileLoaded = {};
   function updateOverall(){
-    const donePct = total?Math.round(uploaded/total*100):0;
+    const donePct = total?Math.round(doneCount/total*100):0;
     const bytePct = totalBytes?Math.round(loadedBytes/totalBytes*100):0;
     $('uploadProgressBar').style.width=bytePct+'%';
     $('uploadProgressText').textContent=`Uploading clips — ${(loadedBytes/1048576).toFixed(0)} / ${(totalBytes/1048576).toFixed(0)} MB (${bytePct}%) · ${donePct}% done by count`;
   }
   updateOverall();
-  files.forEach((f,i)=>{
-    updateCard(i, 0, 'uploading…', false, false);
-    const xhr=new XMLHttpRequest();
-    const fd=new FormData(); fd.append('file', f);
-    xhr.open('POST','/api/stage');
-    xhr.upload.onprogress = e=>{ if(e.lengthComputable){ const p=Math.round(e.loaded/e.total*100); loadedBytes += (e.loaded-(fileLoaded[i]||0)); fileLoaded[i]=e.loaded; updateCard(i,p,p+'%',false,false); updateOverall(); } };
-    xhr.onload=()=>{
-      if(xhr.status===200){ try{ const d=JSON.parse(xhr.responseText); names[i]=d.name; }catch(e){ names[i]=f.name; } f.__done=true; updateCard(i,100,'✓ done',true,false); }
-      else { f.__err=true; f.__done=true; updateCard(i,100,'failed',false,true); }
-      uploaded++; updateOverall();
-      if(uploaded>=total) finishUpload(names);
-    };
-    xhr.onerror=()=>{ f.__err=true; f.__done=true; updateCard(i,100,'failed',false,true); uploaded++; updateOverall(); if(uploaded>=total) finishUpload(names); };
-    xhr.send(fd);
-  });
+  function done(i){ doneCount++; updateOverall(); if(doneCount>=total) finishUpload(); }
+  files.forEach((f,i)=> uploadOne(i, 0, done));
 }
-function finishUpload(names){
-  selectedFiles = names.filter(Boolean);
+function uploadOne(i, attempt, done){
+  const f = currentUploadFiles[i];
+  if(!f) return;
+  updateCard(i, 0, attempt ? `retrying… (${attempt})` : 'uploading…', false, false);
+  const xhr=new XMLHttpRequest();
+  const fd=new FormData(); fd.append('file', f);
+  xhr.open('POST','/api/stage');
+  xhr.upload.onprogress = e=>{ if(e.lengthComputable){ const p=Math.round(e.loaded/e.total*100); updateCard(i,p,p+'%',false,false); } };
+  xhr.onload=()=>{
+    if(xhr.status===200){
+      let name=f.name;
+      try{ const d=JSON.parse(xhr.responseText); if(d.name) name=d.name; }catch(e){}
+      selectedFiles[i]=name;
+      updateCard(i,100,'✓ done',true,false);
+      done && done(i);
+    } else {
+      if(attempt < 2){ setTimeout(()=> uploadOne(i, attempt+1, done), 1200); }
+      else { updateCard(i,100,'failed',false,true); done && done(i); }
+    }
+  };
+  xhr.onerror=()=>{
+    if(attempt < 2){ setTimeout(()=> uploadOne(i, attempt+1, done), 1200); }
+    else { updateCard(i,100,'failed',false,true); done && done(i); }
+  };
+  xhr.send(fd);
+}
+function finishUpload(){
   $('uploadProgressWrap').style.display='none';
-  const errs = selectedFiles.length < names.length;
-  $('statusMsg').textContent = selectedFiles.length
-    ? `✅ ${selectedFiles.length} clip(s) uploaded` + (errs?' (some failed)':'')
-    : 'Upload failed — try again.';
+  const got = selectedFiles.filter(Boolean).length;
+  const had = currentUploadFiles.length;
+  $('statusMsg').textContent = got
+    ? `✅ ${got} clip(s) uploaded` + (got<had ? ' — some failed, click ↻ Retry on the red ones.' : '')
+    : 'Upload failed — click ↻ Retry on the red ones.';
+  loadStagedCount();
   updateClipMatch();
 }
 function countLines(t){ return (t||'').split("\n").map(s=>s.trim()).filter(Boolean).length; }
