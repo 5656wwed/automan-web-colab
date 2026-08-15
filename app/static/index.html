@@ -378,6 +378,15 @@
 const $ = id => document.getElementById(id);
 let selectedFiles = [];       // single-mode staged clip names
 let currentUploadFiles = [];  // File objects for the current staged set (for retry)
+let uploadTotal=0, uploadDone=0, uploadBytes=0, uploadFileLoaded={};
+function updateUploadOverall(){
+  const totalBytes = currentUploadFiles.reduce((a,f)=>a+(f.size||0),0);
+  const donePct = uploadTotal?Math.round(uploadDone/uploadTotal*100):0;
+  const bytePct = totalBytes?Math.round(uploadBytes/totalBytes*100):0;
+  const bar=$('uploadProgressBar'), txt=$('uploadProgressText');
+  if(bar) bar.style.width=bytePct+'%';
+  if(txt) txt.textContent=`Uploading clips — ${(uploadBytes/1048576).toFixed(0)} / ${(totalBytes/1048576).toFixed(0)} MB (${bytePct}%) · ${donePct}% done by count`;
+}
 let batchCards = [];          // [{title, script, files:[File]}]
 let currentJob = null;
 let pollTimer = null;
@@ -858,27 +867,20 @@ function uploadFiles(fileList){
   $('uploadProgressWrap').style.display='';
   renderFileCards(files);
   selectedFiles = [];
-  let total=files.length, doneCount=0, next=0, active=0;
-  const totalBytes = files.reduce((a,f)=>a+(f.size||0),0);
-  let loadedBytes = 0;
-  function updateOverall(){
-    const donePct = total?Math.round(doneCount/total*100):0;
-    const bytePct = totalBytes?Math.round(loadedBytes/totalBytes*100):0;
-    $('uploadProgressBar').style.width=bytePct+'%';
-    $('uploadProgressText').textContent=`Uploading clips — ${(loadedBytes/1048576).toFixed(0)} / ${(totalBytes/1048576).toFixed(0)} MB (${bytePct}%) · ${donePct}% done by count`;
-  }
+  uploadTotal = files.length; uploadDone=0; uploadBytes=0; uploadFileLoaded={};
+  let next=0, active=0;
   function doneOne(){
-    doneCount++; active--; updateOverall();
-    if(doneCount>=total){ finishUpload(); return; }
+    uploadDone++; active--; updateUploadOverall();
+    if(uploadDone>=uploadTotal){ finishUpload(); return; }
     pump();
   }
   function pump(){
-    while(active < MAX_CONCURRENT && next < total){
+    while(active < MAX_CONCURRENT && next < uploadTotal){
       uploadOne(next++, 0, doneOne);
       active++;
     }
   }
-  updateOverall();
+  updateUploadOverall();
   pump();
 }
 function uploadOne(i, attempt, done){
@@ -889,7 +891,15 @@ function uploadOne(i, attempt, done){
   const fd=new FormData(); fd.append('file', f);
   xhr.open('POST','/api/stage');
   xhr.timeout = 180000;   // 3 min cap so a stuck upload fails+retries instead of hanging
-  xhr.upload.onprogress = e=>{ if(e.lengthComputable){ const p=Math.round(e.loaded/e.total*100); updateCard(i,p,p+'%',false,false); } };
+  xhr.upload.onprogress = e=>{
+    if(e.lengthComputable){
+      const p=Math.round(e.loaded/e.total*100);
+      uploadBytes += (e.loaded - (uploadFileLoaded[i]||0));
+      uploadFileLoaded[i]=e.loaded;
+      updateCard(i,p,p+'%',false,false);
+      updateUploadOverall();
+    }
+  };
   function fail(){
     if(attempt < 2){ setTimeout(()=> uploadOne(i, attempt+1, done), 1500); }
     else { updateCard(i,100,'failed',false,true); done&&done(); }
@@ -907,14 +917,20 @@ function uploadOne(i, attempt, done){
   xhr.ontimeout=fail;
   xhr.send(fd);
 }
-function finishUpload(){
+async function finishUpload(){
   $('uploadProgressWrap').style.display='none';
-  const got = selectedFiles.filter(Boolean).length;
-  const had = currentUploadFiles.length;
-  $('statusMsg').textContent = got
-    ? `✅ ${got} clip(s) uploaded` + (got<had ? ' — some failed, click ↻ Retry on the red ones.' : '')
-    : 'Upload failed — click ↻ Retry on the red ones.';
-  loadStagedCount();
+  // Confirm against the server (source of truth) and show the staged count.
+  try{
+    const r=await api('/api/stage'); const d=await r.json();
+    const n=(d.files||[]).length;
+    $('statusMsg').textContent = n
+      ? `✅ ${n} clip(s) confirmed on server` + (n<uploadTotal?' — some failed, click ↻ Retry on red ones.':'')
+      : 'No clips received — click ↻ Retry on red ones.';
+    $('stagedCount').textContent = n ? `📦 ${n} clip(s) staged on server` : '';
+  }catch(e){
+    const got = selectedFiles.filter(Boolean).length;
+    $('statusMsg').textContent = `✅ ${got} clip(s) done` + (got<uploadTotal?' (some failed, click ↻ Retry)':'');
+  }
   updateClipMatch();
 }
 function countLines(t){ return (t||'').split("\n").map(s=>s.trim()).filter(Boolean).length; }
