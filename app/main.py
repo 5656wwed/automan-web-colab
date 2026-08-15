@@ -33,6 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent          # /home/ubuntu/automa
 UPLOAD_DIR = BASE_DIR / "uploads"
 STAGE_DIR = BASE_DIR / "stage"
 JOBS_DIR = BASE_DIR / "jobs"
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 STAGE_DIR.mkdir(parents=True, exist_ok=True)
 
