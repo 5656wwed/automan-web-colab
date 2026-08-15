@@ -847,52 +847,64 @@ function updateCard(i, pct, state, ok, err){
 function retryFile(i){
   const f = currentUploadFiles[i];
   if(!f){ $('statusMsg').textContent='No file to retry.'; return; }
-  uploadOne(i, 0, true);
+  uploadOne(i, 0, function(){ loadStagedCount(); updateClipMatch(); });
 }
 
+const MAX_CONCURRENT = 4;   // upload this many clips at once (avoid tunnel congestion)
 function uploadFiles(fileList){
   const files = Array.from(fileList);
   if(!files.length) return;
   files.forEach(f=>{ f.__done=false; f.__err=false; });
   $('uploadProgressWrap').style.display='';
   renderFileCards(files);
-  let doneCount=0; const total=files.length;
+  selectedFiles = [];
+  let total=files.length, doneCount=0, next=0, active=0;
   const totalBytes = files.reduce((a,f)=>a+(f.size||0),0);
-  let loadedBytes = 0; const fileLoaded = {};
+  let loadedBytes = 0;
   function updateOverall(){
     const donePct = total?Math.round(doneCount/total*100):0;
     const bytePct = totalBytes?Math.round(loadedBytes/totalBytes*100):0;
     $('uploadProgressBar').style.width=bytePct+'%';
     $('uploadProgressText').textContent=`Uploading clips — ${(loadedBytes/1048576).toFixed(0)} / ${(totalBytes/1048576).toFixed(0)} MB (${bytePct}%) · ${donePct}% done by count`;
   }
+  function doneOne(){
+    doneCount++; active--; updateOverall();
+    if(doneCount>=total){ finishUpload(); return; }
+    pump();
+  }
+  function pump(){
+    while(active < MAX_CONCURRENT && next < total){
+      uploadOne(next++, 0, doneOne);
+      active++;
+    }
+  }
   updateOverall();
-  function done(i){ doneCount++; updateOverall(); if(doneCount>=total) finishUpload(); }
-  files.forEach((f,i)=> uploadOne(i, 0, done));
+  pump();
 }
 function uploadOne(i, attempt, done){
   const f = currentUploadFiles[i];
-  if(!f) return;
+  if(!f){ done&&done(); return; }
   updateCard(i, 0, attempt ? `retrying… (${attempt})` : 'uploading…', false, false);
   const xhr=new XMLHttpRequest();
   const fd=new FormData(); fd.append('file', f);
   xhr.open('POST','/api/stage');
+  xhr.timeout = 180000;   // 3 min cap so a stuck upload fails+retries instead of hanging
   xhr.upload.onprogress = e=>{ if(e.lengthComputable){ const p=Math.round(e.loaded/e.total*100); updateCard(i,p,p+'%',false,false); } };
+  function fail(){
+    if(attempt < 2){ setTimeout(()=> uploadOne(i, attempt+1, done), 1500); }
+    else { updateCard(i,100,'failed',false,true); done&&done(); }
+  }
   xhr.onload=()=>{
     if(xhr.status===200){
       let name=f.name;
       try{ const d=JSON.parse(xhr.responseText); if(d.name) name=d.name; }catch(e){}
       selectedFiles[i]=name;
       updateCard(i,100,'✓ done',true,false);
-      done && done(i);
-    } else {
-      if(attempt < 2){ setTimeout(()=> uploadOne(i, attempt+1, done), 1200); }
-      else { updateCard(i,100,'failed',false,true); done && done(i); }
-    }
+      done&&done();
+    } else { fail(); }
   };
-  xhr.onerror=()=>{
-    if(attempt < 2){ setTimeout(()=> uploadOne(i, attempt+1, done), 1200); }
-    else { updateCard(i,100,'failed',false,true); done && done(i); }
-  };
+  xhr.onerror=fail;
+  xhr.ontimeout=fail;
   xhr.send(fd);
 }
 function finishUpload(){
