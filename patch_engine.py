@@ -105,29 +105,38 @@ class KokoroProvider(TTSProvider):
 
 def patch_wrapper(path: Path) -> bool:
     src = path.read_text()
-    if "_video_flags(export)" in src:
-        return False
-    src = src.replace("def _run_ffmpeg(", HELPER + "\ndef _run_ffmpeg(", 1)
+    changed = False
     pat = re.compile(r'"-c:v",\s*export\.codec,\s*"-crf",\s*str\(export\.crf\),\s*"-preset",\s*export\.preset_speed,', re.S)
-    src, n = pat.subn("*_video_flags(export),", src)
-    path.write_text(src)
-    print(f"[wrapper] patched {n} encode blocks")
-    return True
+    if "_video_flags(export)" not in src:
+        src, n = pat.subn("*_video_flags(export),", src)
+        if n:
+            changed = True
+    if "def _video_flags" not in src:
+        src = src.rstrip() + "\n" + HELPER + "\n"
+        changed = True
+    if changed:
+        path.write_text(src)
+        print(f"[wrapper] _video_flags ensured")
+    return changed
 
 
 def patch_engine_transitions(path: Path) -> bool:
     if not path.exists():
         return False
     src = path.read_text()
-    if "_video_flags(export)" in src:
-        return False
+    changed = False
     pat = re.compile(r'"-c:v",\s*export\.codec,\s*"-crf",\s*str\(export\.crf\),\s*"-preset",\s*export\.preset_speed,', re.S)
-    src, n = pat.subn("*_video_flags(export),", src)
-    if n and "_video_flags" not in src:
-        src = src.replace("def _build_xfade", HELPER + "\ndef _build_xfade", 1) if "def _build_xfade" in src else src
-    path.write_text(src)
-    print(f"[transitions] patched {n} encode blocks")
-    return True
+    if "_video_flags(export)" not in src:
+        src, n = pat.subn("*_video_flags(export),", src)
+        if n:
+            changed = True
+    if "def _video_flags" not in src:
+        src = src.rstrip() + "\n" + HELPER + "\n"
+        changed = True
+    if changed:
+        path.write_text(src)
+        print(f"[transitions] _video_flags ensured")
+    return changed
 
 
 def patch_config(path: Path) -> bool:
