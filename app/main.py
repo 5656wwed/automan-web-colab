@@ -1489,6 +1489,26 @@ def get_job_log(job_id: str, request: Request):
     return JSONResponse({"job_id": job_id, "log": "\n".join(j.get("log", []))})
 
 
+@app.get("/api/logs")
+def api_logs(request: Request):
+    """Server log tail (if LOG_PATH set) + the most recent render job's log."""
+    require_auth(request)
+    out = {"server": "", "latest_job": None, "latest_log": ""}
+    lp = os.environ.get("LOG_PATH")
+    if lp and Path(lp).exists():
+        out["server"] = _tail_log(Path(lp), 300)
+    items = sorted(JOBS.values(), key=lambda j: j.get("started", 0), reverse=True)
+    if items:
+        j = items[0]
+        out["latest_job"] = {"id": j.get("id"), "status": j.get("status")}
+        lf = j.get("log_file")
+        if lf and Path(lf).exists():
+            out["latest_log"] = Path(lf).read_text(encoding="utf-8", errors="ignore")[-8000:]
+        else:
+            out["latest_log"] = "\n".join(j.get("log", []))[-8000:]
+    return out
+
+
 @app.get("/api/projects/{project_id}/download")
 def download(project_id: str, request: Request):
     require_auth(request)

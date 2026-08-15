@@ -95,6 +95,7 @@
   <div class="dropbar">
     <div class="tab active" data-tab="create">＋ Create</div>
     <div class="tab" data-tab="renders">📺 My videos</div>
+    <div class="tab" data-tab="logs">📜 Logs</div>
     <div class="tab" data-tab="settings">⚙️ Settings</div>
   </div>
 
@@ -324,6 +325,21 @@
     </div>
   </section>
 
+  <!-- ============ LOGS ============ -->
+  <section id="tabLogs" style="display:none">
+    <div class="card">
+      <div class="stephead"><span class="stepnum">🖥</span><h2>Server log</h2></div>
+      <div class="hint" style="margin-top:6px">Everything the app prints (startup, errors, ffmpeg output). Auto-refreshes every 3s.</div>
+      <pre id="serverLog" style="max-height:260px;overflow:auto;white-space:pre-wrap;font-size:11px;color:#9aa4b2;background:#0d1117;border:1px solid #2b2b40;border-radius:8px;padding:10px">Loading…</pre>
+    </div>
+    <div class="card">
+      <div class="stephead"><span class="stepnum">▶</span><h2>Latest render</h2><span class="spacer"></span><span id="logJobStatus" class="muted" style="font-size:12px"></span></div>
+      <div class="hint" style="margin-top:6px">Live log of the most recent (or currently running) render.</div>
+      <pre id="renderLog" style="max-height:340px;overflow:auto;white-space:pre-wrap;font-size:11px;color:#9aa4b2;background:#0d1117;border:1px solid #2b2b40;border-radius:8px;padding:10px">Loading…</pre>
+      <div class="flex" style="margin-top:8px"><button class="btn-ghost" id="logRefresh">🔄 Refresh</button><span id="logInfo" class="muted" style="font-size:12px;margin-left:10px"></span></div>
+    </div>
+  </section>
+
   <!-- ============ SETTINGS ============ -->
   <section id="tabSettings" style="display:none">
     <div class="card">
@@ -421,14 +437,39 @@ $('logoutBtn').onclick = async () => { await fetch('/api/logout',{method:'POST'}
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
   t.classList.add('active');
-  ['create','renders','settings'].forEach(n=>$('tab'+n[0].toUpperCase()+n.slice(1)).style.display = (t.dataset.tab===n)?'':'none');
+  ['create','renders','logs','settings'].forEach(n=>$('tab'+n[0].toUpperCase()+n.slice(1)).style.display = (t.dataset.tab===n)?'':'none');
   if (t.dataset.tab==='renders') refreshRenders();
+  if (t.dataset.tab==='logs') refreshLogs();
   if (t.dataset.tab==='settings') loadSettings();
 });
 function switchTab(name){
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab===name));
-  ['create','renders','settings'].forEach(n=>$('tab'+n[0].toUpperCase()+n.slice(1)).style.display = (name===n)?'':'none');
+  ['create','renders','logs','settings'].forEach(n=>$('tab'+n[0].toUpperCase()+n.slice(1)).style.display = (name===n)?'':'none');
+  if(name==='logs') refreshLogs();
+  else { if(typeof logTimer!=='undefined') clearInterval(logTimer); }
 }
+
+/* ---------------- logs tab ---------------- */
+let logTimer=null;
+async function refreshLogs(){
+  try{
+    const r = await api('/api/logs');
+    const d = await r.json();
+    const sLog=$('serverLog'), rLog=$('renderLog');
+    if(sLog && d.server!==undefined) sLog.textContent = d.server || '(server log empty)';
+    if(rLog && d.latest_log!==undefined) rLog.textContent = d.latest_log || '(no render log yet)';
+    const st=$('logJobStatus');
+    if(st) st.textContent = d.latest_job ? `${d.latest_job.id} · ${d.latest_job.status}` : '';
+    const info=$('logInfo');
+    if(info) info.textContent = new Date().toLocaleTimeString() + (d.latest_job?` · job ${d.latest_job.status}`:' · no jobs yet');
+    if(rLog) rLog.scrollTop = rLog.scrollHeight;
+    clearInterval(logTimer);
+    if($('tabLogs').style.display !== 'none') logTimer = setInterval(refreshLogs, 3000);
+  }catch(e){
+    clearInterval(logTimer);
+  }
+}
+$('logRefresh').onclick = ()=> refreshLogs();
 
 /* ---------------- mode toggle ---------------- */
 function setMode(m){
