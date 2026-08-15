@@ -47,11 +47,11 @@ LUTS_DIR = THEAUTOMAN_DIR / "luts"
 LUTS_DIR.mkdir(parents=True, exist_ok=True)
 MUSIC_DIR = THEAUTOMAN_DIR / "music"
 MUSIC_DIR.mkdir(parents=True, exist_ok=True)
-# ffmpeg binary: prefer the engine's bundled one, else system
+# ffmpeg binary: prefer $FFMPEG_PATH env, else the engine's bundled one, else system
 _BUNDLED_FF = THEAUTOMAN_DIR / ".tools" / "ffmpeg" / "bin" / "ffmpeg"
-_FFMPEG = str(_BUNDLED_FF) if _BUNDLED_FF.exists() else "ffmpeg"
+_FFMPEG = os.environ.get("FFMPEG_PATH") or (str(_BUNDLED_FF) if _BUNDLED_FF.exists() else "ffmpeg")
 _BUNDLED_FP = THEAUTOMAN_DIR / ".tools" / "ffmpeg" / "bin" / "ffprobe"
-_FFPROBE = str(_BUNDLED_FP) if _BUNDLED_FP.exists() else "ffprobe"
+_FFPROBE = os.environ.get("FFPROBE_PATH") or (str(_BUNDLED_FP) if _BUNDLED_FP.exists() else "ffprobe")
 
 ALLOWED_MEDIA = {".mp4", ".mov", ".mkv", ".avi", ".webm", ".jpg", ".jpeg", ".png", ".webp"}
 # Directory where Pocket TTS voice clones are stored (env-overridable for Colab).
