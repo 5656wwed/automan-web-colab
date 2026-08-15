@@ -1,0 +1,21 @@
+# Secrets / state (never commit)
+settings.json
+sessions.json
+
+# Runtime data
+uploads/
+jobs/
+stage/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+*.bak

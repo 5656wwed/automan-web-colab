@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AutoScene Studio</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; background:#0a0a14; color:#e6edf3; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px; }
+  .card { background:#14141f; border:1px solid #2b2b40; border-radius:14px; padding:20px; margin-bottom:16px; }
+  h1 { font-size:22px; margin:0 0 2px; font-weight:800; letter-spacing:-.5px; }
+  .muted { color:#8b949e; }
+  .hint { color:#8b949e; font-size:13px; line-height:1.5; margin:4px 0 12px; }
+  label { display:block; font-size:13px; color:#aeb6c1; margin-bottom:6px; font-weight:600; }
+  input, select, textarea {
+    width:100%; padding:11px 12px; background:#0d1117; border:1px solid #30363d;
+    border-radius:9px; color:#e6edf3; font-size:14px; font-family:inherit;
+  }
+  textarea { resize: vertical; line-height:1.5; }
+  button {
+    padding:11px 18px; border:0; border-radius:9px; background:#1f6feb; color:#fff;
+    font-weight:700; font-size:14px; cursor:pointer; font-family:inherit;
+  }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .btn-green { background:#238636; }
+  .btn-ghost { background:#2b2b40; color:#e6edf3; }
+  .btn-danger { background:#8f2a2a; }
+  .big { width:100%; padding:16px; font-size:16px; font-weight:800; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:150px; }
+  .drop { border:2px dashed #3a3a52; border-radius:12px; padding:30px; text-align:center; color:#8b949e; cursor:pointer; }
+  .drop.drag { border-color:#1f6feb; background:#0d1117; color:#e6edf3; }
+  .dropbar { display:flex; gap:6px; margin-bottom:18px; background:#14141f; border:1px solid #2b2b40; border-radius:12px; padding:6px; }
+  .tab { flex:1; padding:12px; cursor:pointer; font-weight:700; color:#8b949e; border-radius:9px; text-align:center; font-size:14px; }
+  .tab.active { background:#1f6feb; color:#fff; }
+  #loginOverlay { position:fixed; inset:0; background:#0a0a14; display:none; align-items:center; justify-content:center; z-index:50; }
+  #loginOverlay.show { display:flex; }
+  .loginBox { width:330px; background:#14141f; border:1px solid #2b2b40; border-radius:14px; padding:28px; }
+  .stat { background:#0d1117; border:1px solid #2b2b40; border-radius:10px; padding:14px; margin-bottom:10px; }
+  .bar { height:10px; background:#1c1c2e; border-radius:6px; overflow:hidden; margin-top:8px; }
+  .bar > div { height:100%; background:linear-gradient(90deg,#1f6feb,#238636); width:0; transition:width .4s; }
+  #logBox { background:#0d1117; border:1px solid #2b2b40; border-radius:8px; padding:10px; max-height:200px; overflow:auto; white-space:pre-wrap; font-size:11px; color:#9aa4b2; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:700; }
+  .badge.rendering { background:#1f6feb33; color:#79b8ff; }
+  .badge.done { background:#23863633; color:#56d364; }
+  .badge.failed { background:#f8514933; color:#f85149; }
+  .badge.queued { background:#8b949e33; color:#8b949e; }
+  .flex { display:flex; align-items:center; gap:10px; }
+  .spacer { flex:1; }
+  a { color:#79b8ff; }
+  .stepnum { width:30px; height:30px; border-radius:50%; background:#1f6feb; color:#fff; display:inline-flex; align-items:center; justify-content:center; font-weight:800; margin-right:10px; }
+  .stephead { display:flex; align-items:center; margin-bottom:6px; }
+  .stephead h2 { margin:0; font-size:17px; font-weight:800; }
+  details summary { cursor:pointer; font-weight:700; font-size:14px; color:#aeb6c1; padding:4px 0; }
+  details .inner { margin-top:16px; }
+  .mode-row { display:flex; gap:12px; margin-bottom:18px; }
+  .mode-btn { flex:1; padding:20px; border-radius:14px; border:2px solid #2b2b40; background:#14141f; color:#e6edf3; cursor:pointer; text-align:left; }
+  .mode-btn.active { border-color:#238636; background:#10251a; }
+  .mode-btn .t { font-size:16px; font-weight:800; display:block; }
+  .mode-btn .d { font-size:12px; color:#8b949e; display:block; margin-top:4px; }
+  .bcard { background:#0d1117; border:1px solid #2b2b40; border-radius:12px; padding:16px; margin-bottom:14px; }
+  .bcard .bhead { display:flex; align-items:center; margin-bottom:10px; }
+  .bcard .bnum { width:26px; height:26px; border-radius:50%; background:#2b2b40; color:#e6edf3; display:inline-flex; align-items:center; justify-content:center; font-weight:800; margin-right:10px; }
+  .bcard .bdel { margin-left:auto; background:transparent; color:#f85149; border:none; font-size:18px; cursor:pointer; padding:4px 8px; }
+  .chip { display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; margin-left:6px; }
+  .chip.ok { background:#23863633; color:#56d364; }
+  .chip.bad { background:#f8514933; color:#f85149; }
+  #statusMsg, #batchMsg { color:#8b949e; font-size:13px; margin-top:10px; }
+  .toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#1c2430; border:1px solid #2b2b40; color:#e6edf3; padding:12px 20px; border-radius:10px; font-size:14px; z-index:60; box-shadow:0 6px 24px rgba(0,0,0,.5); display:none; max-width:90vw; }
+</style>
+</head>
+<body>
+
+<!-- Login -->
+<div id="loginOverlay">
+  <div class="loginBox">
+    <h1>🔐 Sign in</h1>
+    <p class="hint">AutoScene Studio is protected. Enter your login details.</p>
+    <input type="email" id="loginEmail" placeholder="Email" style="margin-bottom:10px">
+    <input type="password" id="loginPw" placeholder="Password" style="margin-bottom:10px">
+    <button id="loginBtn" style="width:100%">Log in</button>
+    <div id="loginErr" class="muted" style="color:#f85149;margin-top:10px"></div>
+  </div>
+</div>
+
+<main id="app" style="display:none">
+  <header class="flex" style="margin-bottom:14px">
+    <h1>🎬 AutoScene Studio</h1>
+    <span class="spacer"></span>
+    <span id="loginState" class="muted"></span>
+    <button id="logoutBtn" class="btn-ghost" style="padding:7px 12px;font-size:12px">Logout</button>
+  </header>
+
+  <div class="dropbar">
+    <div class="tab active" data-tab="create">＋ Create</div>
+    <div class="tab" data-tab="renders">📺 My videos</div>
+    <div class="tab" data-tab="settings">⚙️ Settings</div>
+  </div>
+
+  <!-- ============ CREATE ============ -->
+  <section id="tabCreate">
+
+    <!-- Mode toggle -->
+    <div class="mode-row">
+      <div class="mode-btn active" id="modeSingle">
+        <span class="t">🎬 Make one video</span>
+        <span class="d">Paste one script + clips, get one video.</span>
+      </div>
+      <div class="mode-btn" id="modeBatch">
+        <span class="t">📚 Make many videos</span>
+        <span class="d">Multiple videos at once — they render one by one, overnight.</span>
+      </div>
+    </div>
+
+    <!-- SINGLE panel -->
+    <div id="singlePanel">
+
+      <div class="card">
+        <div class="stephead"><span class="stepnum">1</span><h2>Name your video</h2></div>
+        <input type="text" id="title" placeholder="e.g. The Battle of Thermopylae">
+      </div>
+
+      <div class="card">
+        <div class="stephead"><span class="stepnum">2</span><h2>Your narration script</h2></div>
+        <p class="hint">Write your story here. <b>Each line becomes one scene</b> — the narrator reads it over one of your clips. So 10 lines = 10 clips/scenes.</p>
+        <textarea id="script" rows="8" placeholder="A Roman governor lies dead by his own sword...&#10;Three legions, gone...&#10;Not defeated in open battle, but swallowed whole..."></textarea>
+        <div id="scriptCount" class="hint" style="margin:6px 0 0"></div>
+      </div>
+
+      <div class="card">
+        <div class="stephead"><span class="stepnum">3</span><h2>Your clips / images</h2></div>
+        <p class="hint">Pick one clip (or image) for <b>each line</b>, in the same order. Line 1 → first clip, line 2 → second clip, and so on.</p>
+        <div class="drop" id="drop">Drop your video clips or images here<br>or <b>click to browse</b></div>
+        <input type="file" id="files" accept="video/*,image/*" multiple hidden>
+        <div id="uploadProgressWrap" style="display:none;margin-top:12px">
+          <div class="bar"><div id="uploadProgressBar" style="width:0%"></div></div>
+          <div id="uploadProgressText" class="hint" style="margin-top:4px"></div>
+        </div>
+        <div id="fileList" class="hint" style="margin-top:8px"></div>
+        <div id="clipMatch" class="hint" style="margin-top:6px"></div>
+        <div class="flex" style="margin-top:10px">
+          <span id="stagedCount" class="muted"></span>
+          <span class="spacer"></span>
+          <button class="btn-ghost" id="downloadClipsBtn" style="padding:7px 12px;font-size:12px">⬇ Download all clips</button>
+          <button class="btn-danger" id="clearStagedBtn" style="padding:7px 12px;font-size:12px">🧹 Clear all clips</button>
+        </div>
+      </div>
+
+      <button class="big btn-green" id="go">🚀 Create my video</button>
+      <div id="statusMsg"></div>
+    </div>
+
+    <!-- BATCH panel -->
+    <div id="batchPanel" style="display:none">
+      <div class="card">
+        <div class="stephead"><span class="stepnum">✦</span><h2>Add one card per video</h2></div>
+        <p class="hint">Every card below is its own complete video (name + script + clips). They render <b>one after another automatically</b> — set it up and leave, or even go to sleep.</p>
+        <div id="batchCards"></div>
+        <button class="btn-ghost" id="addBatchCard" style="width:100%;margin-bottom:14px">➕ Add another video</button>
+        <button class="big btn-green" id="goBatch">🚀 Create all videos</button>
+        <div id="batchMsg"></div>
+      </div>
+    </div>
+
+    <!-- Advanced (shared, collapsible) -->
+    <details class="card">
+      <summary>⚙️ Advanced — voice, music, look, presets</summary>
+      <div class="inner">
+
+        <div class="row" style="margin-bottom:6px">
+          <div><label>Narrator voice</label>
+            <select id="voiceProvider">
+              <option value="edge" selected>Edge TTS (free, fast)</option>
+              <option value="pocket">Pocket TTS (voice clone)</option>
+              <option value="fishaudio">Fish Audio (voice clone)</option>
+              <option value="kokoro">Kokoro TTS (GPU)</option>
+            </select>
+          </div>
+          <div id="edgeVoiceWrap"><label>Voice</label>
+            <select id="voice">
+              <option value="en-US-GuyNeural">Guy (US) — deep</option>
+              <option value="en-US-AriaNeural">Aria (US) — female</option>
+              <option value="en-GB-RyanNeural">Ryan (UK) — male</option>
+              <option value="en-GB-SoniaNeural">Sonia (UK) — female</option>
+            </select>
+          </div>
+          <div id="pocketVoiceWrap" style="display:none"><label>Pocket voice / clone</label>
+            <select id="pocketVoice"></select>
+          </div>
+          <div id="fishVoiceWrap" style="display:none"><label>Fish Audio voice</label>
+            <select id="fishVoice"></select>
+          </div>
+          <div id="kokoroVoiceWrap" style="display:none"><label>Kokoro voice</label>
+            <select id="kokoroVoice"></select>
+          </div>
+        </div>
+
+        <div class="flex" style="margin-top:8px;flex-wrap:wrap;gap:10px">
+          <input id="voicePreviewText" placeholder="Sample sentence…" value="Hello! This is a sample of the voice you selected." style="flex:1;min-width:220px">
+          <button class="btn-ghost" id="voicePreviewBtn">🔊 Preview voice</button>
+        </div>
+        <div class="flex" style="margin-top:8px;align-items:center;gap:10px">
+          <audio id="voicePreviewAudio" controls style="height:34px;display:none;flex:1;min-width:200px"></audio>
+          <span id="voicePreviewMsg" class="muted"></span>
+        </div>
+
+        <div id="cloneSection">
+          <label>🎤 Clone a voice (Pocket)</label>
+          <p class="hint" style="margin:2px 0 8px">Upload a short, clear voice sample (10–30s of speech). Give it a name — it's saved under that name and shows up in the Pocket voice list. <b>Tip: WAV gives the best clone — MP3 compression slightly blurs the voice.</b></p>
+          <div class="row">
+            <div><label>Name this clone <span style="color:#f85149">*</span></label><input id="cloneName" placeholder="e.g. My narrator"></div>
+            <div><label>Sample audio</label><input type="file" id="cloneFile" accept=".wav,.mp3,.m4a,.ogg,.mp4,.webm"></div>
+          </div>
+          <div class="flex" style="margin-top:8px">
+            <button class="btn-ghost" id="cloneBtn">🎤 Clone voice</button>
+            <span id="cloneMsg" class="muted"></span>
+          </div>
+          <div class="hint" style="margin-top:10px" id="cloneListInfo"></div>
+        </div>
+
+        <div class="row" style="margin-bottom:6px">
+          <div><label>Resolution</label>
+            <select id="res"><option value="1280x720" selected>720p — fast</option><option value="1920x1080">1080p — HD</option><option value="3840x2160">4K — huge</option></select>
+          </div>
+          <div><label>Transition</label>
+            <select id="transition"><option value="fade" selected>Fade</option><option value="dissolve">Dissolve</option><option value="dip_to_black">Dip to black</option><option value="cross_zoom">Cross zoom</option><option value="none">None</option></select>
+          </div>
+          <div><label>🎨 Color filter</label>
+            <select id="colorFilter"><option value="">None (original)</option></select>
+          </div>
+        </div>
+        <div class="flex" style="margin-top:8px;flex-wrap:wrap;gap:8px">
+          <label style="margin:0;font-size:12px">Upload a .cube filter:</label>
+          <input type="file" id="lutFile" accept=".cube" style="max-width:280px;padding:6px">
+          <button class="btn-ghost" id="lutUploadBtn" style="padding:7px 12px">⬆ Upload</button>
+          <span id="lutMsg" class="muted"></span>
+        </div>
+
+        <div class="row" style="margin-bottom:6px">
+          <div><label>Filter intensity <span id="vInt" class="muted">100%</span></label><input type="range" id="fInt" min="0" max="100" value="100"></div>
+          <div><label>Brightness <span id="vBri" class="muted">0</span></label><input type="range" id="fBri" min="-50" max="50" value="0"></div>
+          <div><label>Contrast <span id="vCon" class="muted">100%</span></label><input type="range" id="fCon" min="50" max="200" value="100"></div>
+          <div><label>Saturation <span id="vSat" class="muted">100%</span></label><input type="range" id="fSat" min="0" max="300" value="100"></div>
+          <div><label>Warmth <span id="vWar" class="muted">0</span></label><input type="range" id="fWar" min="-100" max="100" value="0"></div>
+        </div>
+
+        <div style="margin-bottom:6px">
+          <label>Background music</label>
+          <div class="row">
+            <div><select id="musicSel"><option value="">No music</option></select></div>
+            <div><label>Volume <span id="vMus" class="muted">30%</span></label><input type="range" id="fMus" min="0" max="100" value="30"></div>
+            <div style="display:flex;align-items:center;min-width:200px"><label style="margin:0"><input type="checkbox" id="muteOrig" style="width:auto;margin-right:6px">Mute the clips' own sound</label></div>
+          </div>
+          <div class="flex" style="margin-top:8px;flex-wrap:wrap;gap:8px">
+            <label style="margin:0;font-size:12px">Upload a track:</label>
+            <input type="file" id="musicFile" accept=".mp3,.wav,.m4a,.aac,.ogg" style="max-width:280px;padding:6px">
+            <button class="btn-ghost" id="musicUploadBtn" style="padding:7px 12px">⬆ Upload</button>
+            <span id="musicMsg" class="muted"></span>
+          </div>
+        </div>
+
+        <div style="margin-bottom:6px">
+          <label>🎨 Quick preview</label>
+          <p class="hint" style="margin:0 0 8px">Test the filter + music on your first clip before the full render.</p>
+          <div class="flex">
+            <button class="btn-ghost" id="previewBtn">Render preview image</button>
+            <button class="btn-green" id="previewClipBtn">Preview clip (with music)</button>
+            <span id="previewMsg" class="muted"></span>
+          </div>
+          <img id="previewImg" style="max-width:100%;max-height:320px;border-radius:8px;background:#000;margin-top:8px;display:none" alt="preview">
+          <video id="previewVideo" controls style="display:none;max-width:100%;max-height:320px;border-radius:8px;background:#000;margin-top:8px"></video>
+        </div>
+
+        <div style="margin-bottom:6px">
+          <label>Pronunciation dictionary <span class="muted">(so names are said right)</span></label>
+          <textarea id="pron" rows="4" placeholder="Leonidas = Lee-on-i-das&#10;Xerxes = Zerk-seez&#10;Thermopylae = Ther-mop-i-lee" spellcheck="false"></textarea>
+          <div class="flex" style="margin-top:8px">
+            <button class="btn-green" id="savePron">💾 Save dictionary</button>
+            <button class="btn-ghost" id="scanNames">🔍 Find names in my script</button>
+            <span id="pronStatus" class="muted"></span>
+          </div>
+          <div id="nameResults" class="muted" style="margin-top:8px"></div>
+        </div>
+
+        <div>
+          <label>Presets</label>
+          <div class="row">
+            <div><select id="presetSel"><option value="">— pick a saved look —</option></select></div>
+            <div><input type="text" id="presetName" placeholder="Save current as..."></div>
+          </div>
+          <div class="flex" style="margin-top:8px">
+            <button class="btn-green" id="presetApply">Apply</button>
+            <button class="btn-ghost" id="presetSave">💾 Save</button>
+            <button class="btn-ghost" id="presetDefault">★ Set default</button>
+            <button class="btn-danger" id="presetDelete">Delete</button>
+            <span id="presetMsg" class="muted"></span>
+          </div>
+        </div>
+
+      </div>
+    </details>
+  </section>
+
+  <!-- ============ MY VIDEOS ============ -->
+  <section id="tabRenders" style="display:none">
+    <div class="card">
+      <div class="flex" style="margin-bottom:8px">
+        <h2 style="margin:0;font-size:17px">Now rendering</h2>
+        <span class="spacer"></span>
+        <button class="btn-danger" id="clearQueueBtn" style="padding:7px 12px;font-size:12px">✖ Clear waiting queue</button>
+      </div>
+      <div id="liveStatus" class="hint">No active render.</div>
+      <div id="liveLog"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px">Recent jobs</h2>
+      <div id="jobList" class="hint">Loading…</div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px">📦 Finished videos on server</h2>
+      <p class="hint" style="margin-top:0">Every finished video stays on the server and is downloadable here — even after a restart.</p>
+      <div id="library" class="hint">Loading…</div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="tabSettings" style="display:none">
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px">Storage & auto-delete</h2>
+      <div class="row">
+        <div><label>Delete server data after (days)</label><input type="number" id="setRetention" min="1" value="7"></div>
+        <div><label>Auto-cleanup</label><select id="setCleanup"><option value="true">On</option><option value="false">Off</option></select></div>
+        <div><label>Check every (hours)</label><input type="number" id="setEvery" min="1" value="1"></div>
+      </div>
+      <div class="hint" style="margin-top:8px" id="storageInfo"></div>
+      <div class="flex" style="margin-top:10px">
+        <button class="btn-green" id="saveSettings">💾 Save settings</button>
+        <button class="btn-danger" id="clearNow">🧹 Delete expired now</button>
+      </div>
+      <div id="settingsMsg" class="muted" style="margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px">Defaults</h2>
+      <div class="row">
+        <div><label>Default voice engine</label><select id="setProv"><option value="edge">Edge TTS</option><option value="pocket">Pocket TTS</option><option value="fishaudio">Fish Audio</option><option value="kokoro">Kokoro</option></select></div>
+        <div id="setVoiceWrap"><label>Default voice</label><select id="setVoice"><option value="">— choose —</option></select></div>
+        <div style="display:flex;align-items:center;min-width:260px"><label style="margin:0"><input type="checkbox" id="setAutoPreset" style="width:auto;margin-right:6px">Auto-apply my ★ default preset</label></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px">Voice services</h2>
+      <div class="row">
+        <div><label>Fish Audio API key</label><input type="password" id="setFishKey" placeholder="sk-..."></div>
+        <div style="display:flex;align-items:center;min-width:220px"><label style="margin:0"><span id="fishKeyStatus" class="muted"></span></label></div>
+      </div>
+      <p class="hint" style="margin-top:8px">Get your key from fish.audio → API Keys. Once saved, your Fish Audio voices appear in the narrator dropdown.</p>
+      <div class="flex" style="margin-top:10px">
+        <button class="btn-green" id="saveFishKey">💾 Save Fish Audio key</button>
+        <button class="btn-ghost" id="refreshFishVoices" style="padding:11px 18px">🔄 Refresh voices</button>
+        <span id="fishMsg" class="muted"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0 0 8px;font-size:17px">Security</h2>
+      <div class="row">
+        <div><label>New password (leave empty to keep current)</label><input type="password" id="setNewPw" placeholder="••••••••"></div>
+        <div><label>&nbsp;</label><button id="clearPw" class="btn-ghost" style="width:100%">Disable login</button></div>
+      </div>
+      <p class="hint" style="margin-top:8px">Set a password to protect the site. Until then, anyone with the link can render.</p>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let selectedFiles = [];       // single-mode staged clip names
+let batchCards = [];          // [{title, script, files:[File]}]
+let currentJob = null;
+let pollTimer = null;
+
+/* ---------------- toast ---------------- */
+let toastTimer;
+function toast(msg){
+  const t=$('toast'); t.textContent=msg; t.style.display='block';
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.style.display='none', 5000);
+}
+
+/* ---------------- auth ---------------- */
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (r.status === 401) { showLogin(); throw new Error('unauthorized'); }
+  return r;
+}
+function showLogin() { $('loginOverlay').classList.add('show'); $('app').style.display='none'; }
+function showApp() { $('loginOverlay').classList.remove('show'); $('app').style.display=''; }
+
+$('loginBtn').onclick = async () => {
+  $('loginErr').textContent='';
+  const r = await fetch('/api/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:$('loginEmail').value, password:$('loginPw').value})});
+  if (r.ok) { location.reload(); }
+  else { const d = await r.json().catch(()=>({})); $('loginErr').textContent = d.detail || 'Wrong email or password'; }
+};
+$('loginEmail').addEventListener('keydown', e => { if(e.key==='Enter') $('loginPw').focus(); });
+$('loginPw').addEventListener('keydown', e => { if(e.key==='Enter') $('loginBtn').click(); });
+$('logoutBtn').onclick = async () => { await fetch('/api/logout',{method:'POST'}); showLogin(); };
+
+/* ---------------- tabs ---------------- */
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  ['create','renders','settings'].forEach(n=>$('tab'+n[0].toUpperCase()+n.slice(1)).style.display = (t.dataset.tab===n)?'':'none');
+  if (t.dataset.tab==='renders') refreshRenders();
+  if (t.dataset.tab==='settings') loadSettings();
+});
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active', x.dataset.tab===name));
+  ['create','renders','settings'].forEach(n=>$('tab'+n[0].toUpperCase()+n.slice(1)).style.display = (name===n)?'':'none');
+}
+
+/* ---------------- mode toggle ---------------- */
+function setMode(m){
+  const single = m==='single';
+  $('modeSingle').classList.toggle('active', single);
+  $('modeBatch').classList.toggle('active', !single);
+  $('singlePanel').style.display = single ? '' : 'none';
+  $('batchPanel').style.display = single ? 'none' : '';
+}
+$('modeSingle').onclick = ()=>setMode('single');
+$('modeBatch').onclick = ()=>setMode('batch');
+
+/* ---------------- voice engine ---------------- */
+$('voiceProvider').addEventListener('change', () => {
+  const v = $('voiceProvider').value;
+  $('edgeVoiceWrap').style.display = v==='edge' ? '' : 'none';
+  $('pocketVoiceWrap').style.display = v==='pocket' ? '' : 'none';
+  $('fishVoiceWrap').style.display = v==='fishaudio' ? '' : 'none';
+  $('kokoroVoiceWrap').style.display = v==='kokoro' ? '' : 'none';
+  if (v==='pocket') loadClones();
+  if (v==='fishaudio') loadFishVoices();
+  if (v==='kokoro') loadKokoroVoices();
+});
+
+const KOKORO_VOICES=[['af_heart','Heart (US female)'],['af_bella','Bella (US female)'],
+  ['af_nicole','Nicole (US female)'],['af_sarah','Sarah (US female)'],['af_sky','Sky (US female)'],
+  ['am_adam','Adam (US male)'],['am_michael','Michael (US male)'],['am_fenrir','Fenrir (US male)'],
+  ['bf_emma','Emma (UK female)'],['bf_isabella','Isabella (UK female)'],
+  ['bm_george','George (UK male)'],['bm_lewis','Lewis (UK male)'],['ff_siwis','Siwis (FR female)']];
+function loadKokoroVoices(){
+  const sel=$('kokoroVoice'); sel.innerHTML='';
+  KOKORO_VOICES.forEach(([id,name])=>{ const o=document.createElement('option'); o.value=id; o.textContent=name; sel.appendChild(o); });
+  if(!sel.value && KOKORO_VOICES.length) sel.value='af_heart';
+}
+
+let fishVoicesList=[];
+async function loadFishVoices(){
+  const sel=$('fishVoice'); const cur=sel.value;
+  sel.innerHTML='<option value="">Loading…</option>';
+  try{
+    const r=await api('/api/fish/config'); const d=await r.json();
+    fishVoicesList = d.voices || [];
+    if($('fishKeyStatus')) $('fishKeyStatus').textContent = d.has_key ? '✅ Fish Audio key set' : 'No Fish Audio key yet — add one in Settings.';
+    sel.innerHTML='';
+    if(d.has_key && fishVoicesList.length){
+      fishVoicesList.forEach(v=>{ const o=document.createElement('option'); o.value=v.id; o.textContent=(v.is_clone?'⭐ ':'')+v.name; sel.appendChild(o); });
+    } else {
+      sel.innerHTML='<option value="">'+(d.has_key?'No voices found — create one in Fish Audio → My Voices':'Add your Fish Audio key in Settings first')+'</option>';
+    }
+    if(cur && sel.querySelector('option[value="'+cur+'"]')) sel.value=cur;
+  }catch(e){ sel.innerHTML='<option value="">Could not load Fish voices</option>'; }
+}
+function currentVoiceId(){
+  const v=$('voiceProvider').value;
+  if(v==='pocket') return $('pocketVoice').value||'alba';
+  if(v==='fishaudio') return $('fishVoice').value||'';
+  if(v==='kokoro') return $('kokoroVoice').value||'af_heart';
+  return $('voice').value;
+}
+
+/* ---------------- color filters ---------------- */
+async function loadLuts(){
+  try{
+    const r=await api('/api/luts'); const d=await r.json();
+    const sel=$('colorFilter'); sel.innerHTML='<option value="">None (original)</option>';
+    (d.luts||[]).forEach(l=>{ const o=document.createElement('option'); o.value=l; o.textContent=l; sel.appendChild(o); });
+  }catch(e){}
+}
+$('lutUploadBtn').onclick = async ()=>{
+  const f=$('lutFile').files[0];
+  if(!f){ $('lutMsg').textContent='Pick a .cube file first.'; return; }
+  const fd=new FormData(); fd.append('file', f);
+  $('lutMsg').textContent='uploading…'; $('lutUploadBtn').disabled=true;
+  try{
+    const r=await api('/api/luts/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok){ $('lutMsg').textContent='Error: '+(d.detail||''); $('lutUploadBtn').disabled=false; return; }
+    $('lutMsg').textContent=`✅ Saved "${d.saved}"`; loadLuts(); $('lutFile').value='';
+  }catch(e){ $('lutMsg').textContent='error: '+e; }
+  $('lutUploadBtn').disabled=false;
+};
+function filterValues(){
+  return {
+    intensity: parseInt($('fInt').value)/100,
+    brightness: parseInt($('fBri').value)/100,
+    contrast: parseInt($('fCon').value)/100,
+    saturation: parseInt($('fSat').value)/100,
+    warmth: parseInt($('fWar').value)/100,
+  };
+}
+function updateSliderLabels(){
+  $('vInt').textContent=parseInt($('fInt').value)+'%';
+  $('vBri').textContent=parseInt($('fBri').value);
+  $('vCon').textContent=parseInt($('fCon').value)+'%';
+  $('vSat').textContent=parseInt($('fSat').value)+'%';
+  $('vWar').textContent=parseInt($('fWar').value);
+}
+['fInt','fBri','fCon','fSat','fWar'].forEach(id=>{ $(id).addEventListener('input', ()=>{ updateSliderLabels(); schedulePreview(); }); });
+$('colorFilter').addEventListener('change', schedulePreview);
+// Show a live preview automatically when the Advanced panel first opens.
+document.querySelector('#tabCreate details').addEventListener('toggle', ()=>{
+  if(document.querySelector('#tabCreate details').open) schedulePreview();
+});
+$('previewBtn').onclick = async ()=>{ await doPreview(false); };
+$('previewClipBtn').onclick = async ()=>{ await doPreview(true); };
+async function doPreview(clip){
+  const mySeq = ++previewSeq;
+  const fv=filterValues();
+  const fd=new FormData();
+  fd.append('color_filter',$('colorFilter').value);
+  fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
+  fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
+  if(clip){
+    const mv=musicValues();
+    fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop);
+    fd.append('clip',1);
+  }
+  // NOTE: do NOT send a 'file' field here — the backend already falls back to the
+  // first staged clip when no file is uploaded. Sending the staged filename as a
+  // string caused "Error: [object Object]" (422 Expected UploadFile, received str).
+  $('previewMsg').textContent='rendering…';
+  try{
+    const r=await api('/api/preview',{method:'POST',body:fd});
+    if(mySeq!==previewSeq) return; // a newer preview superseded this one
+    if(r.ok){
+      const blob=await r.blob();
+      if(clip){ $('previewVideo').src=URL.createObjectURL(blob); $('previewVideo').style.display=''; $('previewVideo').play().catch(()=>{}); $('previewImg').style.display='none'; $('previewMsg').textContent='done'; }
+      else { $('previewImg').src=URL.createObjectURL(blob); $('previewImg').style.display=''; $('previewVideo').style.display='none'; $('previewMsg').textContent='done'; }
+    } else { const d=await r.json().catch(()=>({})); $('previewMsg').textContent='Error: '+(d.detail||r.status); }
+  }catch(e){ if(mySeq===previewSeq) $('previewMsg').textContent='error: '+e; }
+}
+let previewSeq = 0;
+let previewDebounce = null;
+function schedulePreview(){
+  clearTimeout(previewDebounce);
+  previewDebounce = setTimeout(()=>doPreview(false), 600);
+}
+
+/* ---------------- background music ---------------- */
+async function loadMusic(){
+  try{
+    const r=await api('/api/music'); const d=await r.json();
+    const sel=$('musicSel'); const keep=sel.value; sel.innerHTML='<option value="">No music</option>';
+    (d.music||[]).forEach(t=>{ const o=document.createElement('option'); o.value=t.name; o.textContent=t.name; sel.appendChild(o); });
+    if(keep) sel.value=keep;
+  }catch(e){}
+}
+$('fMus').addEventListener('input', ()=> $('vMus').textContent=parseInt($('fMus').value)+'%');
+function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fMus').value)/100, mute:$('muteOrig').checked?1:0, loop:1 }; }
+$('musicUploadBtn').onclick = async ()=>{
+  const f=$('musicFile').files[0];
+  if(!f){ $('musicMsg').textContent='Pick an audio file first.'; return; }
+  const fd=new FormData(); fd.append('file', f);
+  $('musicMsg').textContent='uploading…'; $('musicUploadBtn').disabled=true;
+  try{
+    const r=await api('/api/music/upload',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok){ $('musicMsg').textContent='Error: '+(d.detail||''); $('musicUploadBtn').disabled=false; return; }
+    $('musicMsg').textContent=`✅ Saved "${d.saved}"`; loadMusic();
+    if(d.name) $('musicSel').value=d.name;
+    $('musicFile').value='';
+  }catch(e){ $('musicMsg').textContent='error: '+e; }
+  $('musicUploadBtn').disabled=false;
+};
+
+/* ---------------- presets + defaults ---------------- */
+function collectFormSettings(){
+  const fv=filterValues(), mv=musicValues();
+  return {
+    voice_provider:$('voiceProvider').value,
+    voice_id: currentVoiceId(),
+    color_filter:$('colorFilter').value,
+    intensity:fv.intensity, brightness:fv.brightness, contrast:fv.contrast, saturation:fv.saturation, warmth:fv.warmth,
+    music:mv.name, music_volume:mv.volume, mute_original:!!mv.mute, music_loop:true,
+    resolution:$('res').value, quality:'high', transition:$('transition').value,
+  };
+}
+function applySettingsToForm(s){
+  if(!s) return;
+  if(s.voice_provider){ $('voiceProvider').value=s.voice_provider;
+    $('pocketVoiceWrap').style.display=s.voice_provider==='pocket'?'':'none';
+    $('edgeVoiceWrap').style.display=(s.voice_provider==='pocket'||s.voice_provider==='fishaudio'||s.voice_provider==='kokoro')?'none':'';
+    $('fishVoiceWrap').style.display=s.voice_provider==='fishaudio'?'':'none';
+    $('kokoroVoiceWrap').style.display=s.voice_provider==='kokoro'?'':'none'; }
+  if(s.voice_id){ if(s.voice_provider==='pocket') $('pocketVoice').value=s.voice_id;
+    else if(s.voice_provider==='fishaudio') $('fishVoice').value=s.voice_id;
+    else if(s.voice_provider==='kokoro') $('kokoroVoice').value=s.voice_id;
+    else if($('voice').querySelector('option[value="'+s.voice_id+'"]')) $('voice').value=s.voice_id; }
+  if(s.color_filter && $('colorFilter').querySelector('option[value="'+s.color_filter+'"]')) $('colorFilter').value=s.color_filter;
+  if(s.intensity!==undefined) $('fInt').value=Math.round(s.intensity*100);
+  if(s.brightness!==undefined) $('fBri').value=Math.round(s.brightness*100);
+  if(s.contrast!==undefined) $('fCon').value=Math.round(s.contrast*100);
+  if(s.saturation!==undefined) $('fSat').value=Math.round(s.saturation*100);
+  if(s.warmth!==undefined) $('fWar').value=Math.round(s.warmth*100);
+  if(s.music && $('musicSel').querySelector('option[value="'+s.music+'"]')) $('musicSel').value=s.music;
+  if(s.music_volume!==undefined) $('fMus').value=Math.round(s.music_volume*100);
+  if(s.mute_original!==undefined) $('muteOrig').checked=!!s.mute_original;
+  if(s.resolution) $('res').value=s.resolution;
+  if(s.transition) $('transition').value=s.transition;
+  updateSliderLabels(); $('vMus').textContent=parseInt($('fMus').value)+'%';
+}
+let presetsList=[], defaultPresetName='';
+async function loadPresets(){
+  try{ const r=await api('/api/presets'); const d=await r.json(); presetsList=d.presets||[]; defaultPresetName=d.default||'';
+    const sel=$('presetSel'); const keep=sel.value; sel.innerHTML='<option value="">— pick a saved look —</option>';
+    presetsList.forEach(p=>{ const o=document.createElement('option'); o.value=p.name; o.textContent=(p.is_default?'★ ':'')+p.name; sel.appendChild(o); });
+    if(keep) sel.value=keep;
+  }catch(e){}
+}
+function defaultPreset(){ return presetsList.find(p=>p.name===defaultPresetName); }
+$('presetApply').onclick=()=>{ const n=$('presetSel').value, p=presetsList.find(x=>x.name===n);
+  if(p){ applySettingsToForm(p); $('presetMsg').textContent='Applied "'+n+'"'; } else $('presetMsg').textContent='Pick a preset first.'; };
+$('presetSave').onclick=async()=>{ const n=$('presetName').value.trim()||('preset '+(presetsList.length+1));
+  await api('/api/presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n,settings:collectFormSettings()})});
+  $('presetMsg').textContent='Saved "'+n+'"'; loadPresets(); $('presetSel').value=n; $('presetName').value=''; };
+$('presetDefault').onclick=async()=>{ const n=$('presetSel').value; if(!n){ $('presetMsg').textContent='Pick a preset first.'; return; }
+  await api('/api/presets/'+encodeURIComponent(n)+'/default',{method:'PUT'}); defaultPresetName=n;
+  $('presetMsg').textContent='★ "'+n+'" is now the default'; loadPresets(); };
+$('presetDelete').onclick=async()=>{ const n=$('presetSel').value; if(!n){ $('presetMsg').textContent='Pick a preset.'; return; }
+  await api('/api/presets/'+encodeURIComponent(n),{method:'DELETE'}); $('presetMsg').textContent='Deleted "'+n+'"'; loadPresets(); };
+
+/* ---------------- clones + voices ---------------- */
+let edgeVoicesList = [];   // [{id,name,locale}] from /api/voices
+let clonesList = [];       // clone names from /api/clones
+const POCKET_PRESETS = ['alba','marius'];
+
+function pocketVoiceOptions(){
+  const names = POCKET_PRESETS.concat(clonesList);
+  const seen = new Set();
+  return names.filter(n=>{ if(seen.has(n)) return false; seen.add(n); return true; });
+}
+function populatePocketVoices(sel){
+  if(!sel) sel = $('pocketVoice');
+  const cur = sel.value;
+  sel.innerHTML = '';
+  POCKET_PRESETS.forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p==='alba'?'Alba (built-in)':'Marius (built-in)'; sel.appendChild(o); });
+  clonesList.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c+' (your clone)'; sel.appendChild(o); });
+  if(cur && sel.querySelector('option[value="'+cur+'"]')) sel.value=cur;
+  else sel.value = 'alba';
+}
+function populateDefaultVoice(){
+  const sel = $('setVoice'); 
+  const cur = sel.value || pendingDefaultVoice;
+  sel.innerHTML = '<option value="">— choose —</option>';
+  if($('setProv').value==='pocket'){
+    POCKET_PRESETS.forEach(p=>{ const o=document.createElement('option'); o.value=p; o.textContent=p==='alba'?'Alba (built-in)':'Marius (built-in)'; sel.appendChild(o); });
+    clonesList.forEach(c=>{ const o=document.createElement('option'); o.value=c; o.textContent=c+' (your clone)'; sel.appendChild(o); });
+  } else {
+    edgeVoicesList.forEach(v=>{ const o=document.createElement('option'); o.value=v.id; o.textContent=v.name+' ('+v.locale+')'; sel.appendChild(o); });
+  }
+  if(cur && sel.querySelector('option[value="'+cur+'"]')) sel.value=cur;
+}
+let pendingDefaultVoice = '';
+function updateCloneListInfo(){
+  const el = $('cloneListInfo');
+  if(!el) return;
+  if(!clonesList.length){ el.textContent='No clones yet — create your first one above.'; return; }
+  el.innerHTML = '<b>Your saved clones:</b> ' + clonesList.map(c=>
+    `<span style="display:inline-block;background:#1c2430;border:1px solid #2b2b40;border-radius:20px;padding:3px 10px;margin:3px;font-size:12px">${c} <a href="#" data-rename="${c}" title="Rename" style="color:#79b8ff;text-decoration:none">✎</a></span>`
+  ).join('') + ' <span class="muted" style="font-size:11px">— click ✎ to rename</span>';
+  document.querySelectorAll('[data-rename]').forEach(a=>a.onclick=e=>{ e.preventDefault(); renameClone(a.dataset.rename); });
+}
+function renameClone(oldName){
+  const nn = prompt('Rename clone "'+oldName+'" to:', oldName);
+  if(!nn || nn.trim()===oldName) return;
+  const newName = nn.trim();
+  if(newName!==oldName){
+    fetch('/api/clones/'+encodeURIComponent(oldName)+'/rename?new_name='+encodeURIComponent(newName), {method:'POST'})
+      .then(async r=>{
+        if(r.ok){ clonesList = clonesList.map(c=>c===oldName?newName:c); populatePocketVoices(); populateDefaultVoice(); updateCloneListInfo(); toast('Renamed to "'+newName+'"'); }
+        else { const d=await r.json().catch(()=>({})); toast('Rename failed: '+(d.detail||'error')); }
+      }).catch(()=>toast('Rename failed'));
+  }
+}
+async function loadClones() {
+  try {
+    const r = await api('/api/clones'); const d = await r.json();
+    clonesList = d.clones || [];
+    populatePocketVoices();
+    populateDefaultVoice();
+    updateCloneListInfo();
+  } catch(e){}
+}
+async function loadEdgeVoices(){
+  try{
+    const r=await api('/api/voices'); const d=await r.json();
+    edgeVoicesList = d.voices || [];
+    const sel=$('voice'); const keep=sel.value; sel.innerHTML='';
+    edgeVoicesList.forEach(v=>{ const o=document.createElement('option'); o.value=v.id; o.textContent=`${v.name} (${v.locale})`; sel.appendChild(o); });
+    if(keep && sel.querySelector('option[value="'+keep+'"]')) sel.value=keep;
+    populateDefaultVoice();
+  }catch(e){}
+}
+$('setProv').addEventListener('change', populateDefaultVoice);
+
+$('voicePreviewBtn').onclick = async ()=>{
+  const prov = $('voiceProvider').value;
+  const vid = currentVoiceId();
+  const text = $('voicePreviewText').value.trim() || 'Hello! This is a sample of the voice you selected.';
+  if(!vid){ $('voicePreviewMsg').textContent='Pick a voice first.'; return; }
+  $('voicePreviewMsg').textContent='Generating sample…'; $('voicePreviewBtn').disabled=true;
+  try{
+    const url = '/api/voice/preview?provider='+encodeURIComponent(prov)+'&voice_id='+encodeURIComponent(vid)+'&text='+encodeURIComponent(text);
+    const r = await api(url);
+    if(r.ok){
+      const blob = await r.blob(); const a=$('voicePreviewAudio');
+      a.src = URL.createObjectURL(blob); a.style.display='';
+      await a.play().catch(()=>{});
+      $('voicePreviewMsg').textContent = '▶ '+(prov==='pocket'?'Pocket':'Edge')+' / '+(vid||'?');
+    } else { const d=await r.json().catch(()=>({})); $('voicePreviewMsg').textContent='Error: '+(d.detail||'Could not generate'); }
+  }catch(e){ $('voicePreviewMsg').textContent='Error: '+e; }
+  $('voicePreviewBtn').disabled=false;
+};
+
+$('cloneBtn').onclick = async ()=>{
+  const f=$('cloneFile').files[0];
+  if(!f){ $('cloneMsg').textContent='Pick a voice sample file first.'; return; }
+  const name=$('cloneName').value.trim();
+  if(!name){ $('cloneMsg').textContent='Give your clone a name first (required).'; $('cloneName').focus(); return; }
+  const fd=new FormData(); fd.append('name',name); fd.append('file',f);
+  $('cloneMsg').textContent='Cloning… (loads the model, can take ~1 min)';
+  $('cloneBtn').disabled=true;
+  try{
+    const r=await api('/api/clone',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok){ $('cloneMsg').textContent='Error: '+(d.detail||''); $('cloneBtn').disabled=false; return; }
+    await loadClones();
+    $('voiceProvider').value='pocket';
+    $('pocketVoiceWrap').style.display=''; $('edgeVoiceWrap').style.display='none';
+    $('pocketVoice').value=d.name;
+    $('cloneMsg').textContent=`✅ Cloned & saved as "${d.name}". It's now in the Pocket voice list.`;
+    $('cloneFile').value=''; $('cloneName').value='';
+  }catch(e){ $('cloneMsg').textContent='error: '+e; }
+  $('cloneBtn').disabled=false;
+};
+
+/* ---------------- pronunciation ---------------- */
+function pronToText(map){ return Object.entries(map||{}).map(([k,v])=>`${k} = ${v}`).join("\n"); }
+function textToPron(t){
+  const map={};
+  for(const line of t.split("\n")){
+    const m=line.match(/^\s*(.+?)\s*=\s*(.+?)\s*$/);
+    if(m && m[2].trim()) map[m[1].trim()]=m[2].trim();
+  }
+  return map;
+}
+(async function loadPron(){
+  try{ const r=await api('/api/pronunciations'); if(r.ok) $('pron').value=pronToText(await r.json()); }catch(e){}
+})();
+$('savePron').onclick = async ()=>{
+  $('pronStatus').textContent='saving…';
+  try{
+    const r=await api('/api/pronunciations',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({map:textToPron($('pron').value)})});
+    const d=await r.json();
+    $('pronStatus').textContent=r.ok?`saved ${d.saved} rule(s)`:'error';
+  }catch(e){ $('pronStatus').textContent='error'; }
+};
+$('scanNames').onclick = async ()=>{
+  const script=$('script').value;
+  if(!script.trim()){ $('nameResults').textContent='Paste your script first (step 2), then scan.'; return; }
+  $('nameResults').textContent='scanning…';
+  try{
+    const r=await api('/api/names',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({script})});
+    const d=await r.json();
+    if(!(d.names||[]).length){ $('nameResults').textContent=d.note||'No proper nouns detected.'; return; }
+    const existing=textToPron($('pron').value);
+    const newOnes=d.names.filter(n=>!existing[n]);
+    let html='Detected: '+d.names.map(n=>`<button class="namechip" data-n="${encodeURIComponent(n)}" style="margin:2px;background:#30363d;color:#e6edf3;padding:4px 8px;font-size:12px;border-radius:20px">${n}</button>`).join(' ');
+    html+=' <span class="muted">— click to add it (fill the sound after =).</span>';
+    $('nameResults').innerHTML=html;
+    document.querySelectorAll('.namechip').forEach(b=>b.onclick=()=>{
+      const n=decodeURIComponent(b.dataset.n);
+      const cur=$('pron').value.trim();
+      $('pron').value = cur ? cur+'\n'+n+' = ' : n+' = ';
+      $('pron').focus();
+    });
+  }catch(e){ $('nameResults').textContent='error: '+e; }
+};
+
+/* ---------------- single-mode uploads (staged) ---------------- */
+const drop = $('drop'), input = $('files');
+drop.onclick = () => input.click();
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('drag'); };
+drop.ondragleave = () => drop.classList.remove('drag');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('drag'); input.files = e.dataTransfer.files; uploadFiles(e.dataTransfer.files); };
+input.onchange = () => uploadFiles(input.files);
+
+function renderFileCards(files){
+  const box = $('fileList');
+  if(!files.length){ box.innerHTML=''; return; }
+  // Build the list ONCE. Videos use a light icon (decoding 71 video thumbs froze the
+  // browser); only images get a real thumbnail.
+  box.innerHTML = files.map((f,i)=>{
+    const isImg = (f.type||'').startsWith('image/');
+    let thumb;
+    if(isImg){
+      if(!f.__url) f.__url = URL.createObjectURL(f);
+      thumb = `<img src="${f.__url}" style="width:100%;height:100%;object-fit:cover">`;
+    } else {
+      thumb = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px">🎬</div>`;
+    }
+    return `<div class="stat" style="display:flex;align-items:center;gap:12px" data-i="${i}">
+      <div style="flex:0 0 58px;height:40px;background:#000;border-radius:6px;overflow:hidden">${thumb}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(f.name)}</div>
+        <div class="muted" style="font-size:11px">#${i+1} · ${(f.size/1048576).toFixed(1)} MB</div>
+        <div class="bar" style="height:6px;margin-top:4px"><div class="fbar" style="width:0%;background:#1f6feb"></div></div>
+      </div>
+      <span class="fstate" style="flex:0 0 auto;font-size:12px;color:#8b949e">queued</span>
+    </div>`;
+  }).join('');
+}
+function updateCard(i, pct, state, ok, err){
+  const card = $('fileList').querySelector('.stat[data-i="'+i+'"]');
+  if(!card) return;
+  const bar = card.querySelector('.fbar');
+  const st = card.querySelector('.fstate');
+  if(bar) bar.style.width = (pct||0)+'%';
+  if(st){ st.textContent = state; st.style.color = err ? '#f85149' : (ok ? '#56d364' : '#8b949e'); }
+}
+
+function uploadFiles(fileList){
+  const files = Array.from(fileList);
+  if(!files.length) return;
+  files.forEach(f=>{ f.__done=false; f.__err=false; });
+  $('uploadProgressWrap').style.display='';
+  renderFileCards(files);
+  const names=[]; let uploaded=0; const total=files.length;
+  const totalBytes = files.reduce((a,f)=>a+(f.size||0),0);
+  let loadedBytes = 0; const fileLoaded = {};
+  function updateOverall(){
+    const donePct = total?Math.round(uploaded/total*100):0;
+    const bytePct = totalBytes?Math.round(loadedBytes/totalBytes*100):0;
+    $('uploadProgressBar').style.width=bytePct+'%';
+    $('uploadProgressText').textContent=`Uploading clips — ${(loadedBytes/1048576).toFixed(0)} / ${(totalBytes/1048576).toFixed(0)} MB (${bytePct}%) · ${donePct}% done by count`;
+  }
+  updateOverall();
+  files.forEach((f,i)=>{
+    updateCard(i, 0, 'uploading…', false, false);
+    const xhr=new XMLHttpRequest();
+    const fd=new FormData(); fd.append('file', f);
+    xhr.open('POST','/api/stage');
+    xhr.upload.onprogress = e=>{ if(e.lengthComputable){ const p=Math.round(e.loaded/e.total*100); loadedBytes += (e.loaded-(fileLoaded[i]||0)); fileLoaded[i]=e.loaded; updateCard(i,p,p+'%',false,false); updateOverall(); } };
+    xhr.onload=()=>{
+      if(xhr.status===200){ try{ const d=JSON.parse(xhr.responseText); names[i]=d.name; }catch(e){ names[i]=f.name; } f.__done=true; updateCard(i,100,'✓ done',true,false); }
+      else { f.__err=true; f.__done=true; updateCard(i,100,'failed',false,true); }
+      uploaded++; updateOverall();
+      if(uploaded>=total) finishUpload(names);
+    };
+    xhr.onerror=()=>{ f.__err=true; f.__done=true; updateCard(i,100,'failed',false,true); uploaded++; updateOverall(); if(uploaded>=total) finishUpload(names); };
+    xhr.send(fd);
+  });
+}
+function finishUpload(names){
+  selectedFiles = names.filter(Boolean);
+  $('uploadProgressWrap').style.display='none';
+  const errs = selectedFiles.length < names.length;
+  $('statusMsg').textContent = selectedFiles.length
+    ? `✅ ${selectedFiles.length} clip(s) uploaded` + (errs?' (some failed)':'')
+    : 'Upload failed — try again.';
+  updateClipMatch();
+}
+function countLines(t){ return (t||'').split("\n").map(s=>s.trim()).filter(Boolean).length; }
+$('script').addEventListener('input', ()=>{
+  const n=countLines($('script').value);
+  $('scriptCount').textContent = n ? `${n} scene(s) → you'll need ${n} clip(s)` : 'Write your lines above — each line = one scene.';
+  updateClipMatch();
+});
+function updateClipMatch(){
+  const need=countLines($('script').value), got=selectedFiles.length;
+  $('clipMatch').innerHTML = got ? `<span class="chip ${got===need?'ok':'bad'}">${got===need?'✓':'!'} ${got}/${need} clips — one per line</span>` : 'No clips yet — pick some above.';
+}
+
+/* ---------------- staged-clip count + clear ---------------- */
+$('downloadClipsBtn').onclick = ()=>{
+  window.location = '/api/clips/download';
+};
+async function loadStagedCount(){
+  try{
+    const r=await api('/api/stage'); const d=await r.json(); const clips=(d.files||[]);
+    $('stagedCount').textContent = clips.length ? `📦 ${clips.length} clip(s) staged on server` : '';
+    // Show the already-uploaded clips so the user doesn't think they need to re-upload.
+    selectedFiles = clips.map(c=>c.name);
+    if(clips.length){
+      $('fileList').innerHTML = clips.map((c,i)=>{
+        const isImg = /\.(jpe?g|png|webp|gif)$/i.test(c.name);
+        const thumb = `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:18px">${isImg?'🖼':'🎬'}</div>`;
+        return `<div class="stat" style="display:flex;align-items:center;gap:12px">
+          <div style="flex:0 0 58px;height:40px;background:#000;border-radius:6px;overflow:hidden">${thumb}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.name)}</div>
+            <div class="muted" style="font-size:11px">#${i+1} · ${(c.size/1048576).toFixed(1)} MB</div>
+          </div>
+          <span style="flex:0 0 auto;font-size:12px;color:#56d364">✓ on server</span>
+        </div>`;
+      }).join('');
+    }
+    updateClipMatch();
+    return clips.length;
+  }catch(e){ return 0; }
+}
+$('clearStagedBtn').onclick = async ()=>{
+  const n = await loadStagedCount();
+  if(!n){ $('statusMsg').textContent='No clips staged to clear.'; return; }
+  if(!confirm(`Clear all ${n} staged clips and start over?`)) return;
+  try{
+    const r=await api('/api/stage',{method:'DELETE'});
+    await r.json();
+    selectedFiles=[];
+    $('fileList').innerHTML='';
+    $('clipMatch').textContent='No clips — pick some above.';
+    await loadStagedCount();
+    $('statusMsg').textContent=`🧹 Cleared all ${n} staged clip(s). Upload fresh ones below.`;
+  }catch(e){ $('statusMsg').textContent='Error clearing: '+e; }
+};
+
+/* ---------------- single create ---------------- */
+$('go').onclick = async () => {
+  const lines=countLines($('script').value);
+  if(!lines){ toast('Add your narration script in step 2 first.'); return; }
+  let staged=0;
+  try{ const r=await api('/api/stage'); const d=await r.json(); staged=(d.files||[]).length; }catch(e){}
+  if(staged < lines){ toast(`Need ${lines} clip(s) but only ${staged} staged. Upload more (or clear and re-upload).`); return; }
+  if(staged > lines){ toast(`You have ${staged} staged clips but only ${lines} scene(s). Click "🧹 Clear all clips" and upload exactly ${lines}.`); return; }
+  const fd = new FormData();
+  fd.append('title', $('title').value || 'Untitled');
+  fd.append('script', $('script').value);
+  const prov = $('voiceProvider').value;
+  fd.append('voice_provider', prov);
+  fd.append('voice_id', currentVoiceId());
+  fd.append('resolution', $('res').value);
+  fd.append('quality', 'high');
+  fd.append('transition', $('transition').value);
+  fd.append('color_filter', $('colorFilter').value);
+  const fv=filterValues();
+  fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
+  fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
+  const mv=musicValues();
+  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop);
+  const btn=$('go'); btn.disabled=true; $('statusMsg').textContent='Creating project…';
+  try{
+    const r=await api('/api/projects',{method:'POST',body:fd});
+    const d=await r.json();
+    const r2=await api(`/api/projects/${d.project_id}/render`,{method:'POST'});
+    const j=await r2.json();
+    $('statusMsg').textContent=`Render started — video ${d.project_id}`;
+    currentJob=j.job_id;
+    switchTab('renders');
+    startPolling(j.job_id);
+    await loadSettings();
+  }catch(e){ $('statusMsg').textContent='Error: '+e; }
+  btn.disabled=false;
+};
+
+/* ---------------- batch ---------------- */
+function makeBatchCard(i){
+  const w=document.createElement('div'); w.className='bcard';
+  const head=document.createElement('div'); head.className='bhead';
+  const num=document.createElement('span'); num.className='bnum'; num.textContent=i+1;
+  const title=document.createElement('input'); title.placeholder='Video name (e.g. The Fall of Carthage)';
+  const del=document.createElement('button'); del.className='bdel'; del.textContent='✕'; del.title='Remove this video';
+  del.onclick=()=>{ w.remove(); batchCards.splice(i,1); renumberCards(); };
+  head.appendChild(num); head.appendChild(title); head.appendChild(del);
+  const ta=document.createElement('textarea'); ta.rows=4; ta.placeholder='Narration script — one line per scene...';
+  const hint=document.createElement('div'); hint.className='hint'; hint.style.margin='6px 0';
+  const clipLbl=document.createElement('label'); clipLbl.textContent='Clips / images (one per line)';
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='video/*,image/*'; inp.multiple=true;
+  w.appendChild(head); w.appendChild(ta); w.appendChild(hint); w.appendChild(clipLbl); w.appendChild(inp);
+  const card={ title, script:ta, files:[], inp };
+  batchCards[i]=card;
+  function update(){
+    const n=countLines(ta.value), got=inp.files.length;
+    hint.innerHTML = `${n} scene(s) → need ${n} clip(s). ` +
+      `<span class="chip ${got===n?'ok':'bad'}">${got===n?'✓ ready':'pick '+n+' clips'} (${got}/${n})</span>`;
+    inp.style.borderColor = got===n ? '#238636' : '#30363d';
+  }
+  ta.addEventListener('input', update);
+  inp.addEventListener('change', ()=>{ update(); });
+  update();
+  return w;
+}
+function renumberCards(){
+  document.querySelectorAll('#batchCards .bcard').forEach((el,i)=>{ el.querySelector('.bnum').textContent=i+1; });
+}
+function addBatchCard(){ const w=makeBatchCard(batchCards.length); $('batchCards').appendChild(w); }
+$('addBatchCard').onclick = addBatchCard;
+addBatchCard();
+
+$('goBatch').onclick = async () => {
+  const cards = batchCards.filter(c=>c && c.title.value.trim() || c.script.value.trim());
+  if(!cards.length){ toast('Add at least one video card.'); return; }
+  const docTexts=[]; const allFiles=[];
+  for(let i=0;i<batchCards.length;i++){
+    const c=batchCards[i];
+    const title=c.title.value.trim()||('Video '+(i+1));
+    const lines=c.script.value.split("\n").map(s=>s.trim()).filter(Boolean);
+    if(!lines.length){ toast('Video "'+title+'" has no script lines.'); return; }
+    if(c.inp.files.length < lines.length){ toast('Video "'+title+'" needs '+lines.length+' clips but has '+c.inp.files.length+'.'); return; }
+    docTexts.push(`--- ${title} ---\n${lines.join("\n")}`);
+    for(let j=0;j<lines.length;j++){
+      const f=c.inp.files[j];
+      // sequential prefix so the server sorts clips in the right order across all videos
+      const seq=String(allFiles.length+1).padStart(3,'0');
+      allFiles.push(new File([f], seq+'_'+f.name, {type:f.type}));
+    }
+  }
+  const prov=$('voiceProvider').value;
+  const fd=new FormData();
+  fd.append('script', docTexts.join("\n\n"));
+  fd.append('voice_provider',prov);
+  fd.append('voice_id',currentVoiceId());
+  fd.append('resolution',$('res').value);
+  fd.append('quality','high');
+  fd.append('transition',$('transition').value);
+  fd.append('color_filter',$('colorFilter').value);
+  const fv=filterValues();
+  fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
+  fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
+  const mv=musicValues();
+  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop);
+  fd.append('source','files');
+  allFiles.forEach(f=>fd.append('files',f));
+  const btn=$('goBatch'); btn.disabled=true; $('batchMsg').textContent='Creating + queuing…';
+  try{
+    const r=await api('/api/batch',{method:'POST',body:fd});
+    const d=await r.json();
+    if(!r.ok){ $('batchMsg').textContent='Error: '+(d.detail||''); btn.disabled=false; return; }
+    $('batchMsg').textContent=`✅ Queued ${d.documents} video(s) — rendering one after another.`;
+    toast(`✅ ${d.documents} video(s) queued. They render one by one.`);
+    switchTab('renders');
+    refreshRenders();
+    if(d.jobs && d.jobs.length) startPolling(d.jobs[0].job_id);
+  }catch(e){ $('batchMsg').textContent='Error: '+e; }
+  btn.disabled=false;
+};
+
+/* ---------------- live status / polling ---------------- */
+async function startPolling(jobId){
+  stopPolling();
+  pollTimer = setInterval(()=>pollJob(jobId), 2000);
+  pollJob(jobId);
+}
+function stopPolling(){ if(pollTimer){ clearInterval(pollTimer); pollTimer=null; } }
+async function pollJob(jobId){
+  try{
+    const r=await api(`/api/jobs/${jobId}`);
+    const j=await r.json();
+    renderLive(j);
+    if(j.status==='done'||j.status==='failed'){ stopPolling(); refreshRenders(); }
+  }catch(e){ stopPolling(); }
+}
+function renderLive(j){
+  const live=$('liveStatus');
+  const pct = j.progress || 0;
+  const stage = j.stage || '';
+  // Show "scene N/M" only while actually rendering scenes; otherwise just the %/stage
+  const hint = stage.startsWith('rendering scene') && j.scenes_total
+    ? `${pct}% — scene ${j.scenes_done}/${j.scenes_total}`
+    : `${pct}%`;
+  live.innerHTML = `
+    <div class="flex">
+      <span class="badge ${j.status}">${j.status}</span>
+      <span class="spacer"></span>
+      <span class="muted">${escapeHtml(stage)}</span>
+    </div>
+    <div class="bar"><div style="width:${pct}%"></div></div>
+    <div class="hint" style="margin-top:6px">${hint}</div>`;
+  if(j.error){ live.innerHTML += `<div style="color:#f85149;margin-top:8px">${escapeHtml(j.error)}</div>`; }
+}
+async function refreshRenders(){
+  try{
+    const r=await api('/api/jobs');
+    const jobs=await r.json();
+    if(!jobs.length){ $('jobList').textContent='No videos yet — create one in the Create tab.'; }
+    else {
+      const active = jobs.find(j=>j.status==='rendering'||j.status==='queued');
+      if(active && active.status==='rendering'){ currentJob=active.id; renderLive(active); startPolling(active.id); }
+      $('jobList').innerHTML = jobs.map(j=>{
+        const link = j.status==='done' ? `<a href="/api/projects/${j.project_id}/download">⬇ download</a>` : '';
+        const pos = j.status==='queued' ? ` — #${j.queue_pos||'?'} in queue` : '';
+        return `<div class="stat"><div class="flex">
+          <span class="badge ${j.status}">${j.status}</span>
+          <span class="muted">${escapeHtml(j.project_id||'')}</span>
+          <span class="spacer"></span>
+          <span class="muted">${j.progress||0}%</span>${pos} ${link}
+        </div><div class="muted" style="margin-top:4px">${new Date((j.started||0)*1000).toLocaleString()}</div></div>`;
+      }).join('');
+    }
+    loadLibrary();
+  }catch(e){}
+}
+async function loadLibrary(){
+  try{
+    const r=await api('/api/library');
+    const items=await r.json();
+    if(!items.length){ $('library').textContent='Nothing rendered on the server yet.'; return; }
+    $('library').innerHTML = items.map(it=>{
+      const mb=(it.size/1048576).toFixed(1);
+      const d=new Date(it.mtime*1000).toLocaleString();
+      return `<div class="stat"><div class="flex">
+        <span>📦 ${escapeHtml(it.title)}</span>
+        <span class="spacer"></span>
+        <span class="muted">${mb} MB · ${d}</span>
+        <a href="${it.download}">⬇ download</a>
+      </div></div>`;
+    }).join('');
+  }catch(e){}
+}
+$('clearQueueBtn').onclick = async ()=>{
+  try{ const r=await api('/api/queue/clear',{method:'POST'}); const d=await r.json();
+    $('liveStatus').innerHTML = `<span class="muted">Cancelled ${d.cancelled} queued render(s).</span>`; refreshRenders(); }catch(e){}
+};
+async function loadRenders(){ try{ await refreshRenders(); }catch(e){} }
+
+/* ---------------- settings ---------------- */
+function applySettings(s){
+  if(s.retention_days) $('setRetention').value=s.retention_days;
+  $('setCleanup').value = s.cleanup_enabled ? 'true':'false';
+  if(s.cleanup_every_hours) $('setEvery').value=s.cleanup_every_hours;
+  if(s.default_provider) $('setProv').value=s.default_provider;
+  if(s.default_voice) pendingDefaultVoice = s.default_voice;
+  $('setAutoPreset').checked = s.auto_apply_default_preset !== false;
+  $('loginState').textContent = s.login_enabled ? 'Protected' : '';
+  populateDefaultVoice();
+}
+async function loadSettings(){
+  try{
+    const r=await api('/api/settings'); const s=await r.json();
+    applySettings(s);
+    const st=await (await api('/api/storage')).json();
+    const mb=(st.bytes/1048576).toFixed(1);
+    $('storageInfo').textContent=`${st.projects} project(s), ${mb} MB used. Auto-deletes data older than ${st.retention_days} day(s).`;
+    loadFishKeyStatus();
+  }catch(e){}
+}
+async function loadFishKeyStatus(){
+  try{ const r=await api('/api/fish/config'); const d=await r.json();
+    $('fishKeyStatus').textContent = d.has_key ? `✅ Fish Audio key set (${(d.voices||[]).length} voice(s))` : 'No Fish Audio key yet.'; }
+  catch(e){}
+}
+$('saveFishKey').onclick = async ()=>{
+  const key=$('setFishKey').value.trim();
+  if(!key){ $('fishMsg').textContent='Enter your Fish Audio API key first.'; return; }
+  try{
+    const r=await api('/api/fish/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})});
+    const d=await r.json();
+    $('fishMsg').textContent = d.saved ? '✅ Key saved — Fish Audio is ready.' : 'Could not save key.';
+    $('setFishKey').value='';
+    await loadFishKeyStatus(); await loadFishVoices();
+  }catch(e){ $('fishMsg').textContent='Error: '+e; }
+};
+$('refreshFishVoices').onclick = async ()=>{
+  $('fishMsg').textContent='Refreshing…';
+  await loadFishVoices(); await loadFishKeyStatus();
+  $('fishMsg').textContent='Done.';
+};
+$('saveSettings').onclick=async()=>{
+  const body={
+    retention_days: parseInt($('setRetention').value)||7,
+    cleanup_enabled: $('setCleanup').value==='true',
+    cleanup_every_hours: parseInt($('setEvery').value)||1,
+    default_provider: $('setProv').value,
+    default_voice: $('setVoice').value,
+    auto_apply_default_preset: $('setAutoPreset').checked,
+  };
+  const npw=$('setNewPw').value;
+  if(npw) body.new_password=npw;
+  try{
+    const r=await api('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const s=await r.json(); applySettings(s); $('settingsMsg').textContent='Saved ✓';
+    $('setNewPw').value='';
+    if(npw) $('settingsMsg').textContent='Saved ✓ — password updated (re-login on next visit)';
+  }catch(e){ $('settingsMsg').textContent='Error: '+e; }
+};
+$('clearNow').onclick=async()=>{
+  const r=await api('/api/cleanup',{method:'POST'});
+  const d=await r.json();
+  $('settingsMsg').textContent=`Removed ${d.removed} expired project(s).`;
+  loadSettings();
+};
+$('clearPw').onclick=async()=>{
+  const r=await api('/api/settings',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_password:''})});
+  $('settingsMsg').textContent='Login disabled — anyone with the link can now render.';
+};
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------------- boot ---------------- */
+async function initAuth() {
+  // Auth check: only show login if we're actually not authenticated.
+  let s = null;
+  try {
+    await api('/api/me');
+  } catch(e) { showLogin(); return; }
+  // Authenticated — never hide the app because of an optional load failing.
+  try {
+    s = await (await api('/api/settings')).json();
+  } catch(e) {}
+  applySettings(s || {});
+  showApp();
+  loadRenders();
+  loadStagedCount();
+  await loadLuts();
+  await loadMusic();
+  await loadEdgeVoices();
+  await loadClones();
+  await loadPresets();
+  const auto = (s && s.auto_apply_default_preset !== false);
+  const dp = defaultPreset();
+  if (auto && dp) applySettingsToForm(dp);
+  else if (s && s.create_defaults) applySettingsToForm(s.create_defaults);
+  updateScriptCount();
+}
+function updateScriptCount(){
+  const n=countLines($('script').value);
+  $('scriptCount').textContent = n ? `${n} scene(s) → you'll need ${n} clip(s)` : 'Write your lines above — each line = one scene.';
+}
+initAuth();
+</script>
+</body>
+</html>
