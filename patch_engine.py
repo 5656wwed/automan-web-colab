@@ -4,12 +4,15 @@
 Run from the repo root (or pass repo root as argv[1]):
     python3 patch_engine.py [/path/to/theautoman]
 
-Does three things:
+Does the following:
  1. NVENC: adds a `_video_flags(export)` helper to app/ffmpeg/wrapper.py and
     app/transitions/engine.py so h264_nvenc gets correct flags when
     AUTOMAN_CODEC=h264_nvenc. Makes config codec read $AUTOMAN_CODEC.
  2. Kokoro: writes app/tts/kokoro_provider.py (OpenAI-compatible local server).
  3. Registers the Kokoro provider in voice_manager.py and adds the enum.
+ 4. AUDIO: mix_background_music() honors `mute_original`; pipeline Stage 5 uses
+    per-project music_name / music_volume / mute_original from project.json
+    (written by automan-web) instead of a random bg_music track + global volume.
 """
 import re
 import shutil
@@ -173,6 +176,140 @@ def patch_voice_manager(path: Path) -> bool:
     return True
 
 
+def patch_wrapper_audio(path: Path) -> bool:
+    """mix_background_music: honor mute_original instead of hardcoded voice=1.0."""
+    src = path.read_text(encoding="utf-8")
+    if "mute_original" in src:
+        return False
+    changed = False
+    sig_old = ("    music_volume: float = 0.20,\n"
+               "    export: ExportSettings | None = None,\n"
+               ") -> None:")
+    sig_new = ("    music_volume: float = 0.20,\n"
+               "    export: ExportSettings | None = None,\n"
+               "    mute_original: bool = False,\n"
+               ") -> None:")
+    if sig_old in src:
+        src = src.replace(sig_old, sig_new, 1)
+        changed = True
+    af_old = ('    # voice stays full volume; music is attenuated; normalize=0 preserves levels\n'
+              '    af = (\n'
+              '        f"[0:a]volume=1.0[voice];"\n')
+    af_new = ('    # voice stays full volume unless muted; music attenuated; normalize=0 preserves levels\n'
+              '    orig_vol = 0.0 if mute_original else 1.0\n'
+              '    af = (\n'
+              '        f"[0:a]volume={orig_vol:.1f}[voice];"\n')
+    if af_old in src:
+        src = src.replace(af_old, af_new, 1)
+        changed = True
+    if changed:
+        path.write_text(src, encoding="utf-8")
+        print("[wrapper] mix_background_music mute_original supported")
+    else:
+        print("[wrapper] WARNING: mix_background_music patterns not matched")
+    return changed
+
+
+# --- Stage 5 replacement -----------------------------------------------------
+# Matches from `cfg = get_config()` through the bg_music warning line.
+STAGE5_RE = re.compile(
+    r"        cfg = get_config\(\)\n"
+    r"        if cfg\.bg_music_enabled:\n"
+    r".*?"
+    r'log\.warning\(f"  \u26a0 Background music enabled but no files found in \{bg_dir\}"\)\n',
+    re.S,
+)
+
+STAGE5_NEW = (
+    "        chosen, proj_vol, proj_mute = self._resolve_bg_music()\n"
+    "        if chosen:\n"
+    '            log.info(f"\u25b8 Stage 5/5: Mixing background music: {chosen.name} "\n'
+    '                     f"(vol={proj_vol:.0%}{\', original muted\' if proj_mute else \'\'})")\n'
+    '            self._emit_progress("Mixing BG Music", self.project.scene_count, self.project.scene_count, 0.95)\n'
+    '            bgm_tmp = final.parent / (final.stem + "_bgm_tmp.mp4")\n'
+    "            mix_background_music(final, chosen, bgm_tmp, music_volume=proj_vol,\n"
+    "                                 export=self.export, mute_original=proj_mute)\n"
+    "            import os as _os\n"
+    "            _os.replace(str(bgm_tmp), str(final))\n"
+    '            log.info("  \u2713 Background music applied.")\n'
+)
+
+RESOLVE_HELPER = '''
+    def _resolve_bg_music(self):
+        """Resolve background music from project settings.
+
+        Returns (music_path | None, music_volume, mute_original).
+        Priority: project.music_name looked up in <project>/music/,
+        <engine root>/music/, then <engine root>/bg_music/; otherwise a
+        random track from those dirs. Volume/mute come from project.json
+        when present, falling back to global config."""
+        cfg = get_config()
+        proj = getattr(self.project, "config", None)
+        pv = getattr(proj, "music_volume", None)
+        vol = float(pv) if pv is not None else float(cfg.bg_music_volume)
+        mute = bool(getattr(proj, "mute_original", False))
+        name = getattr(proj, "music_name", None)
+        exts = (".mp3", ".m4a", ".wav", ".aac", ".ogg")
+        roots = [self.project.project_dir / "music",
+                 Path(__file__).resolve().parents[2] / "music",
+                 Path(__file__).resolve().parents[2] / "bg_music"]
+        candidates = []
+        for root in roots:
+            if not root.is_dir():
+                continue
+            tracks = [f for f in sorted(root.iterdir())
+                      if f.is_file() and f.suffix.lower() in exts]
+            if name:
+                for f in tracks:
+                    if f.stem == name:
+                        return f, vol, mute
+            candidates += tracks
+        if candidates:
+            return random.choice(candidates), vol, mute
+        return None, vol, mute
+
+'''
+
+def patch_pipeline_audio(path: Path) -> bool:
+    """Stage 5: use per-project music settings from project.json."""
+    src = path.read_text(encoding="utf-8")
+    if "_resolve_bg_music" in src:
+        print("[pipeline] already patched")
+        return False
+    changed = False
+    src2, n = STAGE5_RE.subn(lambda m: STAGE5_NEW, src, count=1)
+    if n:
+        src = src2
+        changed = True
+        print("[pipeline] Stage 5 block replaced")
+    else:
+        print("[pipeline] WARNING: Stage 5 block not matched!")
+    anchor = "    async def run(self)"
+    if anchor in src:
+        src = src.replace(anchor, RESOLVE_HELPER + anchor, 1)
+        changed = True
+    path.write_text(src, encoding="utf-8")
+    print("[pipeline] Stage 5 uses project music settings")
+    return changed
+
+
+def patch_project_model(path: Path) -> bool:
+    """ProjectConfig: accept music_name / music_volume / mute_original / music_loop."""
+    src = path.read_text(encoding="utf-8")
+    if "music_volume" in src:
+        return False
+    marker = "    scenes: list[SceneConfig] = Field(min_length=1)"
+    if marker in src:
+        src = src.replace(marker, marker + "\n"
+                          "    music_name: Optional[str] = None\n"
+                          "    music_volume: Optional[float] = Field(default=None, ge=0.0, le=1.0)\n"
+                          "    mute_original: bool = False\n"
+                          "    music_loop: bool = True", 1)
+    path.write_text(src, encoding="utf-8")
+    print("[project] music fields added to ProjectConfig")
+    return True
+
+
 def main():
     (ROOT / "app" / "tts" / "kokoro_provider.py").write_text(KOKORO_PROVIDER)
     print("[kokoro_provider.py] written")
@@ -180,6 +317,9 @@ def main():
     patch_engine_transitions(ROOT / "app" / "transitions" / "engine.py")
     patch_config(ROOT / "app" / "core" / "config.py")
     patch_voice_manager(ROOT / "app" / "tts" / "voice_manager.py")
+    patch_wrapper_audio(ROOT / "app" / "ffmpeg" / "wrapper.py")
+    patch_project_model(ROOT / "app" / "core" / "project.py")
+    patch_pipeline_audio(ROOT / "app" / "core" / "pipeline.py")
 
 
 if __name__ == "__main__":
