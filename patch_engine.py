@@ -24,7 +24,8 @@ ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path.cwd()
 HELPER = '''
 def _video_flags(export):
     """Return codec flags for export. Uses NVENC flags when codec is an nvenc
-    codec (h264_nvenc / hevc_nvenc), otherwise the original x264 flags."""
+    codec (h264_nvenc / hevc_nvenc), QSV flags for Intel Quick Sync
+    (h264_qsv / hevc_qsv), otherwise the original x264 flags."""
     codec = (export.codec or "libx264").lower()
     if "nvenc" in codec:
         q = getattr(export, "quality", None)
@@ -32,6 +33,12 @@ def _video_flags(export):
         nv_preset = {"low": "p1", "medium": "p3", "high": "p4", "ultra": "p6"}.get(qv, "p4")
         return ["-c:v", export.codec, "-rc", "vbr", "-cq", str(export.crf),
                 "-b:v", "0", "-preset", nv_preset]
+    if "qsv" in codec:
+        q = getattr(export, "quality", None)
+        qv = getattr(q, "value", None) if q is not None else None
+        qsv_preset = {"low": "veryfast", "medium": "medium", "high": "slow", "ultra": "veryslow"}.get(qv, "medium")
+        return ["-c:v", export.codec, "-global_quality", str(export.crf),
+                "-preset", qsv_preset, "-look_ahead", "0"]
     return ["-c:v", export.codec, "-crf", str(export.crf), "-preset", export.preset_speed]
 '''
 
