@@ -51,7 +51,8 @@ def _wav_bytes(text, voice, speed) -> bytes:
         import soundfile as sf
         sf.write(wav, audio, sr)
         mp3 = wav[:-4] + ".mp3"
-        ff = os.environ.get("KOKORO_FFMPEG", "/content/ffmpeg/ffmpeg")
+        import shutil as _sh
+        ff = os.environ.get("KOKORO_FFMPEG") or _sh.which("ffmpeg") or "/usr/bin/ffmpeg"
         subprocess.run([ff, "-y", "-loglevel", "error", "-i", wav,
                         "-b:a", "192k", mp3], check=True)
         return open(mp3, "rb").read()
