@@ -1012,6 +1012,10 @@ async def create_project(
     voice_id: str = Form("es-MX-JorgeNeural"),
     aspect_ratio: str = Form("16:9"),
     transition: str = Form("fade"),
+    transition_seconds: float = Form(0.25),
+    duration_padding: float = Form(0.12),
+    picture_cut_seconds: float = Form(0.0),
+    narration_speed: float = Form(1.0),
     resolution: str = Form("1920x1080"),
     quality: str = Form("high"),
     color_filter: str = Form(""),
@@ -1097,7 +1101,11 @@ async def create_project(
         "resolution": resolution,
         "fps": 30,
         "transition": transition,
-        "transition_duration": 0.4,
+        "transition_duration": transition_seconds,
+        # PACING: picture length follows the voice. padding is the only dead air
+        # left in the video; picture_cut_seconds re-cuts a held still mid-beat.
+        "duration_padding": duration_padding,
+        "picture_cut_seconds": picture_cut_seconds,
         "quality": quality,
         "color_filter": color_filter or None,
         "filter_intensity": intensity,
@@ -1109,7 +1117,8 @@ async def create_project(
         "music_volume": music_volume,
         "mute_original": bool(mute_original),
         "music_loop": bool(music_loop),
-        "voice": {"provider": voice_provider, "voice_id": voice_id},
+        "voice": {"provider": voice_provider, "voice_id": voice_id,
+                  "speed": narration_speed},
         "scenes": scenes,
     }
 
@@ -1137,7 +1146,10 @@ def _build_project(project_id: str, title: str, beats: list[str],
                    contrast: float = 1.0, saturation: float = 1.0,
                    warmth: float = 0.0,
                    music_name: str = "", music_volume: float = 0.3,
-                   mute_original: int = 0, music_loop: int = 1) -> int:
+                   mute_original: int = 0, music_loop: int = 1,
+                   transition_seconds: float = 0.25, duration_padding: float = 0.12,
+                   picture_cut_seconds: float = 0.0,
+                   narration_speed: float = 1.0) -> int:
     """Create a project.json + copy its clips. Returns media file count."""
     pdir = UPLOAD_DIR / project_id / "images"
     pdir.mkdir(parents=True, exist_ok=True)
@@ -1154,7 +1166,9 @@ def _build_project(project_id: str, title: str, beats: list[str],
         "resolution": resolution,
         "fps": 30,
         "transition": transition,
-        "transition_duration": 0.4,
+        "transition_duration": transition_seconds,
+        "duration_padding": duration_padding,
+        "picture_cut_seconds": picture_cut_seconds,
         "quality": quality,
         "color_filter": color_filter or None,
         "filter_intensity": intensity,
@@ -1166,7 +1180,8 @@ def _build_project(project_id: str, title: str, beats: list[str],
         "music_volume": music_volume,
         "mute_original": bool(mute_original),
         "music_loop": bool(music_loop),
-        "voice": {"provider": voice_provider, "voice_id": voice_id},
+        "voice": {"provider": voice_provider, "voice_id": voice_id,
+                  "speed": narration_speed},
         "scenes": scenes,
     }
     (UPLOAD_DIR / project_id / "project.json").write_text(
@@ -1214,6 +1229,10 @@ async def create_batch(
     resolution: str = Form("1920x1080"),
     quality: str = Form("high"),
     transition: str = Form("fade"),
+    transition_seconds: float = Form(0.25),
+    duration_padding: float = Form(0.12),
+    picture_cut_seconds: float = Form(0.0),
+    narration_speed: float = Form(1.0),
     color_filter: str = Form(""),
     intensity: float = Form(1.0),
     brightness: float = Form(0.0),
@@ -1290,7 +1309,11 @@ async def create_batch(
         _build_project(pid, doc["title"], beats, voice_provider, voice_id,
                        resolution, quality, transition, clip_slice, color_filter,
                        intensity, brightness, contrast, saturation, warmth,
-                       music_name, music_volume, mute_original, music_loop)
+                       music_name, music_volume, mute_original, music_loop,
+                       transition_seconds=transition_seconds,
+                       duration_padding=duration_padding,
+                       picture_cut_seconds=picture_cut_seconds,
+                       narration_speed=narration_speed)
         # queue a render
         job_id = uuid.uuid4().hex[:12]
         JOBS[job_id] = {
