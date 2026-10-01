@@ -82,13 +82,79 @@ def re_search_num(s: str) -> int:
     return int(m.group()) if m else 0
 
 
-# Strip story-beat labels ("Beat 1:", "1.", "3)", "#7", "2 -") from the start of a
-# narration line so the TTS never reads the internal script marker out loud.
-# Only matches a leading label; never touches mid-sentence numbers like "3 legions".
-_BEAT_LABEL_RE = re.compile(r"^\s*(?:beat\s*)?(?:\d+\s*[:.)-]|#\d+)\s*", re.IGNORECASE)
+# ---------------------------------------------------------------------------
+# Narration text normalisation (script-structure aware)
+#
+# The documentary pipeline (Step 2c / 3 / 4) emits labelled beat blocks such as
+#
+#     Beat 12 [@the-consul] [VIDEO]: Los hombres esperan la orden en silencio.
+#     [HARD CTA — Beat 60] [IMAGE]: Un campo humeante bajo un cielo gris.
+#
+# Those blocks can be pasted straight into the script box: every internal
+# marker (beat label, @slug, [VIDEO]/[IMAGE], [ZONE ...], [HARD CTA ...],
+# markdown bold) is stripped BEFORE the text reaches TTS, so the narrator
+# reads only the spoken words. Accents, numbers and punctuation inside the
+# sentence itself are never touched.
+# ---------------------------------------------------------------------------
+_BEAT_LABEL_RE = re.compile(
+    r"^[\s\*_]{0,3}(?:beat\s*)?#?\d+\s*(?:[:.)\]\-–—]|\s*$)\s*",
+    re.IGNORECASE,
+)
+
+# Pipeline tags that are never spoken out loud.
+_PIPELINE_TAG_RE = re.compile(
+    r"\[\s*(?:@[\w.\-]+|VIDEO|IMAGE|(?:HARD\s*CTA|ZONE)[^\]\[]*)\s*\]",
+    re.IGNORECASE,
+)
+
+# Markdown emphasis used to bold labels ("**Beat 1:** ...")
+_MD_EMPHASIS_RE = re.compile(r"\*{1,3}")
+
+# A pasted line that starts a NEW beat in the labelled pipeline block.
+_BEAT_START_RE = re.compile(
+    r"^[\s\*_]{0,3}(?:BEAT\s*#?\s*\d+|#\d+|\[\s*HARD\s*CTA)\b",
+    re.IGNORECASE,
+)
+
 
 def clean_beat(line: str) -> str:
-    return _BEAT_LABEL_RE.sub("", line, count=1).strip()
+    """Strip beat labels, pipeline tags and markdown from one narration line.
+
+    Runs twice: a tag may sit before the label ("[ZONE: STRIKE] Beat 7 ..."),
+    so tags have to come off before the label can be recognised at line start.
+    """
+    s = line
+    for _ in range(2):
+        s = _PIPELINE_TAG_RE.sub(" ", s)
+        s = _BEAT_LABEL_RE.sub("", s, count=1)
+        s = _MD_EMPHASIS_RE.sub("", s)
+    s = re.sub(r"\s{2,}", " ", s)
+    return s.strip(" \t:–—-").strip()
+
+
+def split_beats(script: str) -> list[str]:
+    """Split a pasted script into narration beats.
+
+    Two formats are accepted:
+      * the labelled pipeline block ("Beat 1 [@slug] [VIDEO]: ...") — a beat
+        whose line wrapped in the chat/paste is joined back into one beat
+        instead of being counted as two;
+      * plain text, one narration line per beat (the classic format).
+    """
+    raw_lines = script.splitlines()
+    starts = [i for i, ln in enumerate(raw_lines) if _BEAT_START_RE.match(ln)]
+    if len(starts) >= 2:
+        beats = []
+        for n, i in enumerate(starts):
+            end = starts[n + 1] if n + 1 < len(starts) else len(raw_lines)
+            chunk = " ".join(part.strip() for part in raw_lines[i:end] if part.strip())
+            text = clean_beat(chunk)
+            if text:
+                beats.append(text)
+        return beats
+    # Plain format: one beat per non-empty line.
+    return [b for b in (clean_beat(ln) for ln in raw_lines) if b]
+
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +167,9 @@ DEFAULT_SETTINGS = {
     "cleanup_enabled": True,             # run the auto-cleanup task
     "cleanup_every_hours": 1,
     "default_provider": "edge",          # edge | pocket
-    "default_voice": "en-US-GuyNeural",  # edge voice or pocket name/hf:// URL
+    # Narration is locked to Latin American Neutral Spanish → default to a
+    # Latin-American Spanish narrator (English voices are still selectable).
+    "default_voice": "es-MX-JorgeNeural",  # edge voice or pocket name/hf:// URL
     "admin_email": "",                   # login email (if set, login requires email+password)
     "admin_password": "",                # if empty, login is disabled
     "session_hours": 12,
@@ -383,11 +451,21 @@ def api_clone_rename(name: str, new_name: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
-# Edge voices (all male en-US / en-GB) + Pocket voice cloning
+# Edge voices (Spanish listed first, then male en-US / en-GB) + Pocket cloning
 # ---------------------------------------------------------------------------
 _EDGE_VOICES_CACHE: dict = {"at": 0, "voices": []}
 
-def _edge_male_us_uk() -> list[dict]:
+# Latin-American Spanish locales first (neutral accent for the pipeline's
+# locked narration language), then the rest of the Spanish locales.
+_ES_LOCALE_ORDER = ["es-MX", "es-US", "es-CO", "es-AR", "es-CL", "es-PE", "es-VE", "es-EC"]
+
+def _edge_voices() -> list[dict]:
+    """Edge voices offered in the narrator dropdown.
+
+    Latin American Neutral Spanish is the pipeline's locked narration
+    language, so every es-* Edge voice is offered and listed FIRST; the
+    English en-US / en-GB male voices stay available for English scripts.
+    """
     global _EDGE_VOICES_CACHE
     if time.time() - _EDGE_VOICES_CACHE["at"] < 21600 and _EDGE_VOICES_CACHE["voices"]:
         return _EDGE_VOICES_CACHE["voices"]
@@ -398,9 +476,24 @@ def _edge_male_us_uk() -> list[dict]:
         for v in raw:
             loc = v.get("Locale", "")
             gender = (v.get("Gender") or "").lower()
-            if loc in ("en-US", "en-GB") and gender == "male":
-                out.append({"id": v["ShortName"], "name": v.get("FriendlyName", v["ShortName"]), "locale": loc})
-        out.sort(key=lambda x: (x["locale"], x["name"]))
+            is_es = loc.startswith("es-")
+            if not (is_es or (loc in ("en-US", "en-GB") and gender == "male")):
+                continue
+            short = v["ShortName"]
+            human = short.split("-")[-1].replace("Neural", "")
+            out.append({
+                "id": short,
+                "name": f"{human} — {'female' if gender == 'female' else 'male'}",
+                "locale": loc,
+                "gender": gender,
+                "lang": "es" if is_es else "en",
+            })
+        out.sort(key=lambda x: (
+            0 if x["lang"] == "es" else 1,
+            _ES_LOCALE_ORDER.index(x["locale"]) if x["locale"] in _ES_LOCALE_ORDER else 99,
+            x["locale"],
+            x["name"],
+        ))
         _EDGE_VOICES_CACHE = {"at": time.time(), "voices": out}
         return out
     except Exception as e:
@@ -410,7 +503,7 @@ def _edge_male_us_uk() -> list[dict]:
 @app.get("/api/voices")
 def api_voices(request: Request):
     require_auth(request)
-    return {"voices": _edge_male_us_uk()}
+    return {"voices": _edge_voices()}
 
 
 @app.get("/api/voice/preview")
@@ -916,7 +1009,7 @@ async def create_project(
     title: str = Form(...),
     script: str = Form(...),
     voice_provider: str = Form("edge"),
-    voice_id: str = Form("en-US-GuyNeural"),
+    voice_id: str = Form("es-MX-JorgeNeural"),
     aspect_ratio: str = Form("16:9"),
     transition: str = Form("fade"),
     resolution: str = Form("1920x1080"),
@@ -943,10 +1036,10 @@ async def create_project(
     pdir = UPLOAD_DIR / project_id / "images"
     pdir.mkdir(parents=True, exist_ok=True)
 
-    # Parse beats (each non-empty line = one scene's narration).
-    # Strip any leading "Beat N:" / numbered label so it's never spoken by TTS,
-    # and drop lines that had nothing but a label.
-    beats = [b for b in (clean_beat(ln) for ln in script.splitlines()) if b]
+    # Parse beats. Accepts both the labelled pipeline block
+    # ("Beat 1 [@slug] [VIDEO]: ...") and plain one-line-per-beat text;
+    # labels and tags are stripped so the TTS never speaks them.
+    beats = split_beats(script)
     if not beats:
         raise HTTPException(400, "Script is empty — paste at least one narration line.")
 
@@ -1117,7 +1210,7 @@ async def create_batch(
     request: Request,
     script: str = Form(...),
     voice_provider: str = Form("edge"),
-    voice_id: str = Form("en-US-GuyNeural"),
+    voice_id: str = Form("es-MX-JorgeNeural"),
     resolution: str = Form("1920x1080"),
     quality: str = Form("high"),
     transition: str = Form("fade"),
@@ -1187,7 +1280,7 @@ async def create_batch(
     results = []
     ptr = 0
     for doc in docs:
-        beats = [b for b in (clean_beat(ln) for ln in doc["lines"]) if b]
+        beats = split_beats("\n".join(doc["lines"]))
         if not beats:
             raise HTTPException(400, f"Documentary '{doc['title']}' has no narration lines.")
         n = len(beats)

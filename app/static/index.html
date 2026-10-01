@@ -124,7 +124,8 @@
 
       <div class="card">
         <div class="stephead"><span class="stepnum">2</span><h2>Your narration script</h2></div>
-        <p class="hint">Write your story here. <b>Each line becomes one scene</b> — the narrator reads it over one of your clips. So 10 lines = 10 clips/scenes.</p>
+        <p class="hint">Write your story here. <b>Each line becomes one scene</b> — the narrator reads it over one of your clips. So 10 lines = 10 clips/scenes.<br>
+          You can paste the script straight from the pipeline: labelled beat blocks like <code>Beat 12 [@the-consul] [VIDEO]: Los hombres esperan la orden.</code> work as-is — the beat number, <code>[@slug]</code> and <code>[VIDEO]/[IMAGE]</code> tags are stripped before the voiceover, so only the spoken words are read. A beat that wrapped over two lines is joined back into one beat automatically.</p>
         <textarea id="script" rows="8" placeholder="A Roman governor lies dead by his own sword...&#10;Three legions, gone...&#10;Not defeated in open battle, but swallowed whole..."></textarea>
         <div id="scriptCount" class="hint" style="margin:6px 0 0"></div>
       </div>
@@ -180,10 +181,10 @@
           </div>
           <div id="edgeVoiceWrap"><label>Voice</label>
             <select id="voice">
+              <option value="es-MX-JorgeNeural">Jorge — Español (México)</option>
+              <option value="es-MX-DaliaNeural">Dalia — Español (México)</option>
+              <option value="es-US-AlonsoNeural">Alonso — Español (US)</option>
               <option value="en-US-GuyNeural">Guy (US) — deep</option>
-              <option value="en-US-AriaNeural">Aria (US) — female</option>
-              <option value="en-GB-RyanNeural">Ryan (UK) — male</option>
-              <option value="en-GB-SoniaNeural">Sonia (UK) — female</option>
             </select>
           </div>
           <div id="pocketVoiceWrap" style="display:none"><label>Pocket voice / clone</label>
@@ -198,7 +199,7 @@
         </div>
 
         <div class="flex" style="margin-top:8px;flex-wrap:wrap;gap:10px">
-          <input id="voicePreviewText" placeholder="Sample sentence…" value="Hello! This is a sample of the voice you selected." style="flex:1;min-width:220px">
+          <input id="voicePreviewText" placeholder="Sample sentence…" value="Hola, esta es una muestra de la voz del narrador." style="flex:1;min-width:220px">
           <button class="btn-ghost" id="voicePreviewBtn">🔊 Preview voice</button>
         </div>
         <div class="flex" style="margin-top:8px;align-items:center;gap:10px">
@@ -975,13 +976,23 @@ async function finishUpload(){
   updateClipMatch();
 }
 function countLines(t){ return (t||'').split("\n").map(s=>s.trim()).filter(Boolean).length; }
+// Must mirror split_beats() in app/main.py: a pasted labelled beat block
+// ("Beat 12 [@slug] [VIDEO]: ...") counts by beat markers, so a beat whose
+// line wrapped is counted once, not twice.
+const BEAT_START_RE = /^[\s*_]{0,3}(?:BEAT\s*#?\s*\d+|#\d+|\[\s*HARD\s*CTA)\b/i;
+function countBeats(t){
+  const lines=(t||'').split("\n");
+  const starts=lines.filter(l=>BEAT_START_RE.test(l)).length;
+  if(starts>=2) return starts;
+  return lines.map(s=>s.trim()).filter(Boolean).length;
+}
 $('script').addEventListener('input', ()=>{
-  const n=countLines($('script').value);
+  const n=countBeats($('script').value);
   $('scriptCount').textContent = n ? `${n} scene(s) → you'll need ${n} clip(s)` : 'Write your lines above — each line = one scene.';
   updateClipMatch();
 });
 function updateClipMatch(){
-  const need=countLines($('script').value), got=selectedFiles.length;
+  const need=countBeats($('script').value), got=selectedFiles.length;
   $('clipMatch').innerHTML = got ? `<span class="chip ${got===need?'ok':'bad'}">${got===need?'✓':'!'} ${got}/${need} clips — one per line</span>` : 'No clips yet — pick some above.';
 }
 
