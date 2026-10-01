@@ -239,14 +239,17 @@
           <div><label>Beat length (s)</label>
             <input id="beatSeconds" type="number" step="0.1" min="0" max="60" value="8">
           </div>
-          <div><label>New picture every (s)</label>
+          <div><label>Pictures per beat</label>
+            <input id="picturesPerBeat" type="number" step="1" min="0" max="12" value="0" placeholder="free">
+          </div>
+          <div><label>…or new picture every (s)</label>
             <input id="pictureCut" type="number" step="0.1" min="0" max="30" value="4">
           </div>
           <div><label>Transition (s)</label>
             <input id="transitionSeconds" type="number" step="0.05" min="0.1" max="3" value="0.25">
           </div>
         </div>
-        <p class="hint" style="margin:2px 0 8px">Picture time follows the voice. <b>Beat length</b> = 8 s locks every beat to the pipeline's 8-second unit (60 beats = 8:00; a short line holds its shot, a long line is never cut — set 0 to let each picture just follow its own voice). <b>New picture every</b> 4 s gives an 8 s beat two shots of 4 s — your Image A / Image B rule (0 = one held frame). <b>Gap</b> is the only silence between lines (0.12 s = the cut lands right on the voice). <b>Narration speed</b> speeds the narrator up.</p>
+        <p class="hint" style="margin:2px 0 8px">Picture time follows the voice. <b>Beat length</b> = 8 s locks every beat to the pipeline's 8-second unit (60 beats = 8:00; a short line holds its shot, a long line is never cut — 0 lets each picture follow its own voice). <b>Pictures per beat</b> and <b>new picture every (s)</b> are free numbers — set either one, 0 turns it off: 2 per beat = Image A/B, 3 = thirds, or "every 2.5 s" to let the count follow the beat's own length (up to 12). <b>Gap</b> is the only silence between lines (0.12 s = the cut lands right on the voice).</p>
 
         <div class="row" style="margin-bottom:6px">
           <div><label>Resolution</label>
@@ -650,21 +653,22 @@ function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fM
 
 /* ---------------- pace (picture time follows the voice) ---------------- */
 const PACE_PRESETS = {
-  fast:   { speed:1.08, pad:0.12, beat:8, cut:4,   trans:0.25 },
-  normal: { speed:1.00, pad:0.25, beat:8, cut:4,   trans:0.40 },
-  slow:   { speed:0.95, pad:0.50, beat:0, cut:0,   trans:0.60 },
+  fast:   { speed:1.08, pad:0.12, beat:8, per:0, cut:4,   trans:0.25 },
+  normal: { speed:1.00, pad:0.25, beat:8, per:2, cut:0,   trans:0.40 },
+  slow:   { speed:0.95, pad:0.50, beat:0, per:0, cut:0,   trans:0.60 },
 };
 function applyPacePreset(name){
   const p = PACE_PRESETS[name]; if(!p) return;
   $('narrationSpeed').value=p.speed; $('padSeconds').value=p.pad;
-  $('beatSeconds').value=p.beat; $('pictureCut').value=p.cut;
-  $('transitionSeconds').value=p.trans;
+  $('beatSeconds').value=p.beat; $('picturesPerBeat').value=p.per;
+  $('pictureCut').value=p.cut; $('transitionSeconds').value=p.trans;
 }
 function paceValues(){
   return {
     narration_speed: $('narrationSpeed').value || '1',
     duration_padding: $('padSeconds').value || '0',
     beat_seconds: $('beatSeconds').value || '0',
+    pictures_per_beat: $('picturesPerBeat').value || '0',
     picture_cut_seconds: $('pictureCut').value || '0',
     transition_seconds: $('transitionSeconds').value || '0.25',
   };
@@ -673,7 +677,7 @@ function appendPace(fd){
   const p = paceValues(); Object.keys(p).forEach(k=>fd.append(k, p[k]));
 }
 $('pacePreset').addEventListener('change', ()=>applyPacePreset($('pacePreset').value));
-['narrationSpeed','padSeconds','beatSeconds','pictureCut','transitionSeconds'].forEach(id=>{
+['narrationSpeed','padSeconds','beatSeconds','picturesPerBeat','pictureCut','transitionSeconds'].forEach(id=>{
   $(id).addEventListener('input', ()=>{ $('pacePreset').value='custom'; });
 });
 $('musicUploadBtn').onclick = async ()=>{

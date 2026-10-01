@@ -1015,6 +1015,7 @@ async def create_project(
     transition_seconds: float = Form(0.25),
     duration_padding: float = Form(0.12),
     picture_cut_seconds: float = Form(0.0),
+    pictures_per_beat: int = Form(0),
     beat_seconds: float = Form(8.0),
     narration_speed: float = Form(1.0),
     resolution: str = Form("1920x1080"),
@@ -1108,6 +1109,7 @@ async def create_project(
         "duration_padding": duration_padding,
         "picture_cut_seconds": picture_cut_seconds,
         "beat_seconds": beat_seconds,
+        "pictures_per_beat": pictures_per_beat,
         "quality": quality,
         "color_filter": color_filter or None,
         "filter_intensity": intensity,
@@ -1152,6 +1154,7 @@ def _build_project(project_id: str, title: str, beats: list[str],
                    transition_seconds: float = 0.25, duration_padding: float = 0.12,
                    picture_cut_seconds: float = 0.0,
                    beat_seconds: float = 8.0,
+                   pictures_per_beat: int = 0,
                    narration_speed: float = 1.0) -> int:
     """Create a project.json + copy its clips. Returns media file count."""
     pdir = UPLOAD_DIR / project_id / "images"
@@ -1173,6 +1176,7 @@ def _build_project(project_id: str, title: str, beats: list[str],
         "duration_padding": duration_padding,
         "picture_cut_seconds": picture_cut_seconds,
         "beat_seconds": beat_seconds,
+        "pictures_per_beat": pictures_per_beat,
         "quality": quality,
         "color_filter": color_filter or None,
         "filter_intensity": intensity,
@@ -1236,6 +1240,7 @@ async def create_batch(
     transition_seconds: float = Form(0.25),
     duration_padding: float = Form(0.12),
     picture_cut_seconds: float = Form(0.0),
+    pictures_per_beat: int = Form(0),
     beat_seconds: float = Form(8.0),
     narration_speed: float = Form(1.0),
     color_filter: str = Form(""),
@@ -1319,6 +1324,7 @@ async def create_batch(
                        duration_padding=duration_padding,
                        picture_cut_seconds=picture_cut_seconds,
                        beat_seconds=beat_seconds,
+                       pictures_per_beat=pictures_per_beat,
                        narration_speed=narration_speed)
         # queue a render
         job_id = uuid.uuid4().hex[:12]
