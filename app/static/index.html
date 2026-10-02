@@ -1046,14 +1046,35 @@ function countBeats(t){
   if(starts>=2) return starts;
   return lines.map(s=>s.trim()).filter(Boolean).length;
 }
+// Must mirror the engine's beat grouping (app/core/project.py): files named
+// beat-3-image-a / -b / -c are THREE PICTURES OF ONE BEAT, not three beats, so
+// the clip count is beats covered — not files uploaded. Files with no beat
+// number each count as their own beat.
+function beatOfName(name){
+  const m=/(?:^|[^a-z0-9])beat[\s._-]*#?\s*(\d+)/i.exec(name||'');
+  return m?parseInt(m[1],10):null;
+}
+function countBeatGroups(names){
+  const seen=new Set(); let n=0;
+  (names||[]).forEach((name,i)=>{
+    const b=beatOfName(name);
+    const key=(b===null)?('f'+i):('b'+b);
+    if(!seen.has(key)){ seen.add(key); n++; }
+  });
+  return n;
+}
 $('script').addEventListener('input', ()=>{
   const n=countBeats($('script').value);
-  $('scriptCount').textContent = n ? `${n} scene(s) → you'll need ${n} clip(s)` : 'Write your lines above — each line = one scene.';
+  $('scriptCount').textContent = n ? `${n} beat(s) → one clip each, or a run of beat-N-image-a/b/c for one beat` : 'Write your lines above — each line = one beat.';
   updateClipMatch();
 });
 function updateClipMatch(){
-  const need=countBeats($('script').value), got=selectedFiles.length;
-  $('clipMatch').innerHTML = got ? `<span class="chip ${got===need?'ok':'bad'}">${got===need?'✓':'!'} ${got}/${need} clips — one per line</span>` : 'No clips yet — pick some above.';
+  const need=countBeats($('script').value), files=selectedFiles.filter(Boolean).length,
+        got=countBeatGroups(selectedFiles.filter(Boolean));
+  if(!files){ $('clipMatch').innerHTML='No clips yet — pick some above.'; return; }
+  const ok = got===need;
+  $('clipMatch').innerHTML = `<span class="chip ${ok?'ok':'bad'}">${ok?'✓':'!'} ${got}/${need} beats covered</span>`
+    + `<span class="muted" style="margin-left:8px;font-size:11px">${files} file(s) — beat-N-image-a/b/c count as one beat</span>`;
 }
 
 /* ---------------- staged-clip count + clear ---------------- */
@@ -1399,7 +1420,7 @@ async function initAuth() {
 }
 function updateScriptCount(){
   const n=countLines($('script').value);
-  $('scriptCount').textContent = n ? `${n} scene(s) → you'll need ${n} clip(s)` : 'Write your lines above — each line = one scene.';
+  $('scriptCount').textContent = n ? `${n} beat(s) → one clip each, or a run of beat-N-image-a/b/c for one beat` : 'Write your lines above — each line = one beat.';
 }
 initAuth();
 </script>

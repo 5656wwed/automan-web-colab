@@ -83,6 +83,59 @@ def re_search_num(s: str) -> int:
 
 
 # ---------------------------------------------------------------------------
+# Beat-aware media naming
+#
+# Files arrive named by the generator: beat-1-video-…, beat-3-image-a-…,
+# beat-3-image-b-…, beat-3-image-c-… . Everything sharing a beat number is ONE
+# beat of the film (one narration line, one picture block); the letters are the
+# pictures inside that beat. The engine groups by this name, so the copies made
+# here MUST keep the original filename — renaming to 1.ext / 2.ext would turn a
+# 3-picture beat into three separate beats.
+# ---------------------------------------------------------------------------
+_BEAT_OF_RE = re.compile(r"beat[\s._\-]*#?\s*(\d+)", re.IGNORECASE)
+
+
+def beat_of(name: str) -> "int | None":
+    """Beat number in a filename ('beat-3-image-b-001.png' -> 3), else None."""
+    m = _BEAT_OF_RE.search(Path(name or "").stem)
+    return int(m.group(1)) if m else None
+
+
+def _safe_media_name(name: str) -> str:
+    """Filesystem-safe copy of an uploaded filename, beat part preserved."""
+    p = Path(name or "")
+    stem = re.sub(r"[^A-Za-z0-9._\- ]+", "-", p.stem).strip(" -._") or "clip"
+    return f"{stem}{p.suffix.lower() or '.png'}"
+
+
+def _unique_dest(folder: Path, name: str) -> Path:
+    """Never overwrite: same name twice becomes name-2.ext, name-3.ext …"""
+    dest = folder / name
+    if not dest.exists():
+        return dest
+    stem, ext = Path(name).stem, Path(name).suffix
+    for n in range(2, 1000):
+        cand = folder / f"{stem}-{n}{ext}"
+        if not cand.exists():
+            return cand
+    return dest
+
+
+def _one_media_per_beat(media: list[str]) -> list[str]:
+    """First file of every beat, in order — one entry per beat of the film."""
+    reps: list[str] = []
+    seen: set = set()
+    for i, name in enumerate(media):
+        b = beat_of(name)
+        key = ("beat", b) if b is not None else ("file", i)
+        if key in seen:
+            continue
+        seen.add(key)
+        reps.append(name)
+    return reps
+
+
+# ---------------------------------------------------------------------------
 # Narration text normalisation (script-structure aware)
 #
 # The documentary pipeline (Step 2c / 3 / 4) emits labelled beat blocks such as
@@ -101,9 +154,12 @@ _BEAT_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pipeline tags that are never spoken out loud.
+# Pipeline tags that are never spoken out loud. One bracket may hold SEVERAL
+# slugs, comma- or space-separated — [@the-premier, @rome-office] — which is how
+# the documentary pipeline tags a beat with everyone in it. All of them go.
 _PIPELINE_TAG_RE = re.compile(
-    r"\[\s*(?:@[\w.\-]+|VIDEO|IMAGE|(?:HARD\s*CTA|ZONE)[^\]\[]*)\s*\]",
+    r"\[\s*(?:@[\w.\-]+(?:\s*[,;/]\s*@[\w.\-]+)*"
+    r"|VIDEO|IMAGE|(?:HARD\s*CTA|ZONE)[^\]\[]*)\s*\]",
     re.IGNORECASE,
 )
 
@@ -765,7 +821,7 @@ async def preview(
                 out.write(chunk)
     else:
         staged = sorted([f for f in STAGE_DIR.iterdir() if f.is_file()],
-                        key=lambda p: int(re_search_num(p.name)))
+                        key=lambda p: (re_search_num(p.name), p.name.lower()))
         if staged:
             src = staged[0]
     if not src:
@@ -968,7 +1024,11 @@ def stage_list(request: Request):
     """List currently staged clips, sorted numerically."""
     require_auth(request)
     import re
-    files = sorted(STAGE_DIR.iterdir(), key=lambda p: int(re.search(r"\d+", p.name).group() or 0) if re.search(r"\d+", p.name) else 0)
+    files = sorted(
+        STAGE_DIR.iterdir(),
+        key=lambda p: (int(re.search(r"\d+", p.name).group()) if re.search(r"\d+", p.name) else 0,
+                       p.name.lower()),
+    )
     return {"files": [{"name": f.name, "size": f.stat().st_size} for f in files if f.is_file()]}
 
 
@@ -1052,12 +1112,15 @@ async def create_project(
     media_saved = []
     # Prefer staged files (uploaded via /api/stage for progress). If none,
     # fall back to direct multipart upload (legacy path).
+    # Numeric order, ties broken by name so Beat_003_A/B/C keep their A→B→C order.
     staged = sorted([f for f in STAGE_DIR.iterdir() if f.is_file()],
-                    key=lambda p: int(re_search_num(p.name)))
+                    key=lambda p: (re_search_num(p.name), p.name.lower()))
     if staged:
-        for i, src in enumerate(staged[: len(beats)], start=1):
-            ext = src.suffix.lower()
-            dest = pdir / f"{i}{ext}"
+        # Keep the uploaded filename — the engine reads the beat from it
+        # (beat-3-image-a/b/c are three pictures of ONE beat). Renaming the
+        # copies to 1.ext / 2.ext here would destroy that grouping.
+        for src in staged:
+            dest = _unique_dest(pdir, _safe_media_name(src.name))
             dest.write_bytes(src.read_bytes())
             media_saved.append(dest.name)
         # Clear staging after consuming
@@ -1065,35 +1128,35 @@ async def create_project(
             if f.is_file():
                 f.unlink(missing_ok=True)
     else:
-        def _numkey(f: UploadFile) -> int:
-            m = re_search_num(f.filename or "")
-            return m
-        for i, f in enumerate(sorted(files, key=_numkey), start=1):
-            ext = Path(f.filename or f"file{i}").suffix.lower()
+        def _numkey(f: UploadFile) -> tuple:
+            name = f.filename or ""
+            return (re_search_num(name), name.lower())
+        for f in sorted(files, key=_numkey):
+            ext = Path(f.filename or "file").suffix.lower()
             if ext not in ALLOWED_MEDIA:
                 continue
-            dest = pdir / f"{i}{ext}"
+            dest = _unique_dest(pdir, _safe_media_name(f.filename or f"clip{len(media_saved) + 1}.png"))
             with dest.open("wb") as out:
                 while chunk := await f.read(1024 * 1024):
                     out.write(chunk)
             media_saved.append(dest.name)
-            if len(media_saved) == len(beats):
-                break  # only need as many media as beats
 
     if not media_saved:
         # No media uploaded — build project with empty image refs and let
         # validation catch it; but better to error now with a clear message.
         raise HTTPException(400, "No video/image files received. Upload at least one clip.")
 
-    if len(media_saved) < len(beats):
+    beats_in_media = _one_media_per_beat(media_saved)
+    if len(beats_in_media) < len(beats):
         raise HTTPException(
             400,
-            f"You have {len(beats)} narration lines but only {len(media_saved)} media files. "
-            "Each beat needs its own clip/image.",
+            f"You have {len(beats)} narration lines but the uploads only cover "
+            f"{len(beats_in_media)} beats. Each beat needs its own clip, or its "
+            f"own run of images (beat-N-image-a, -b, -c …).",
         )
 
     scenes = [
-        {"image": media_saved[i], "script": beats[i]}
+        {"image": beats_in_media[i], "script": beats[i]}
         for i in range(len(beats))
     ]
 
@@ -1273,13 +1336,14 @@ async def create_batch(
     use_files = source == "files"
     staged = [] if use_files else sorted(
         [f for f in STAGE_DIR.iterdir() if f.is_file()],
-        key=lambda p: int(re_search_num(p.name)))
+        key=lambda p: (re_search_num(p.name), p.name.lower()))
     media_files: list[Path] = []
     if staged:
         for f in staged:
             media_files.append(f)
     else:
-        for f in sorted(files, key=lambda f: re_search_num(f.filename or "")):
+        for f in sorted(files, key=lambda f: (re_search_num(f.filename or ""),
+                                              (f.filename or "").lower())):
             if Path(f.filename or "").suffix.lower() in ALLOWED_MEDIA:
                 media_files.append(Path(f.filename))  # placeholder, see below
 
