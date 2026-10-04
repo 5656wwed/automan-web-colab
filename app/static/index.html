@@ -1390,7 +1390,13 @@ $('saveFishKey').onclick = async ()=>{
   try{
     const r=await api('/api/fish/config',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({api_key:key})});
     const d=await r.json();
-    $('fishMsg').textContent = d.saved ? '✅ Key saved — Fish Audio is ready.' : 'Could not save key.';
+    if(d.key_set){
+      $('fishMsg').textContent = '✅ Key saved and the engine sees it'+(d.voices?` — ${d.voices} voice(s) found.`:' — no voices on the account yet.');
+    } else if(d.saved){
+      $('fishMsg').textContent = '⚠ Saved, but the engine still reports no key. '+(d.error?('Engine said: '+d.error):'Check the key value.');
+    } else {
+      $('fishMsg').textContent = 'Could not save key.';
+    }
     $('setFishKey').value='';
     await loadFishKeyStatus(); await loadFishVoices();
   }catch(e){ $('fishMsg').textContent='Error: '+e; }

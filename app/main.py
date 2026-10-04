@@ -599,7 +599,27 @@ def api_voice_preview(request: Request, provider: str = "edge", voice_id: str = 
     return FileResponse(out_line, media_type=media)
 
 
-ENGINE_CONFIG_PATH = Path.home() / ".config" / "AutoSceneStudio" / "settings.json"
+def _engine_config_path() -> Path:
+    """The ENGINE's own settings.json — must match app/core/config.py exactly.
+
+    Windows : %APPDATA%\\AutoSceneStudio\\settings.json
+    Linux   : ~/.config/AutoSceneStudio/settings.json
+
+    This used to be hardcoded to the ~/.config path on every platform, so on
+    Windows the key was saved to a file the engine never reads — the badge kept
+    saying "No key yet" no matter how many times the key was saved.
+    """
+    if os.name == "nt":
+        base = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+    else:
+        base = Path.home() / ".config"
+    return base / "AutoSceneStudio" / "settings.json"
+
+
+ENGINE_CONFIG_PATH = _engine_config_path()
+# Older builds of this dashboard wrote here on every platform; read it once so a
+# key already saved that way still counts as saved.
+LEGACY_CONFIG_PATH = Path.home() / ".config" / "AutoSceneStudio" / "settings.json"
 
 
 @app.get("/api/fish/config")
@@ -618,20 +638,47 @@ def api_fish_config(request: Request):
 
 @app.put("/api/fish/config")
 def api_fish_set_key(body: dict, request: Request):
-    """Save the Fish Audio API key into the engine config (persists to disk)."""
+    """Save the Fish Audio API key where the ENGINE actually reads it.
+
+    Merges any existing engine config (and the legacy ~/.config file), writes the
+    real engine path, mirrors to the legacy path so nothing reads a stale copy,
+    then RUNS the engine's own check and reports whether it can see the key — so
+    the dashboard can never say "saved" while the engine disagrees.
+    """
     require_auth(request)
     key = (body or {}).get("api_key", "").strip()
     path = ENGINE_CONFIG_PATH
-    data = {}
-    if path.exists():
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except Exception:
-            data = {}
-    data["fish_audio_api_key"] = key
+    data: dict = {}
+    for src in (path, LEGACY_CONFIG_PATH):
+        if src.exists():
+            try:
+                data.update(json.loads(src.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    if key:
+        data["fish_audio_api_key"] = key
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"saved": bool(key)}
+    if LEGACY_CONFIG_PATH.resolve() != path.resolve():
+        with contextlib.suppress(Exception):
+            LEGACY_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            LEGACY_CONFIG_PATH.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Prove it: the same check the Settings badge shows.
+    key_set, voices, err = False, 0, ""
+    try:
+        r = subprocess.run([str(PYTHON), str(THEAUTOMAN_DIR / "fish_info.py")],
+                           capture_output=True, text=True, timeout=90, cwd=str(THEAUTOMAN_DIR))
+        info = json.loads(r.stdout)
+        key_set = bool(info.get("key_set") or info.get("has_key"))
+        voices = len(info.get("voices") or [])
+        if not key_set:
+            err = (r.stderr or "engine reports no key")[-200:]
+    except Exception as e:
+        err = str(e)[:200]
+    return {"saved": bool(data.get("fish_audio_api_key")), "key_set": key_set,
+            "voices": voices, "config_path": str(path), "error": err}
 
 
 @app.post("/api/clone")
