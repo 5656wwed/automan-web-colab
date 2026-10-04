@@ -66,6 +66,19 @@ POCKET_VOICES_DIR = Path(os.environ.get("POCKET_VOICES_DIR", "/home/ubuntu/pocke
 # Finished videos are copied here when set (e.g. Google Drive on Colab).
 DRIVE_OUT_DIR = Path(os.environ.get("DRIVE_OUT_DIR", "")) if os.environ.get("DRIVE_OUT_DIR") else None
 
+# Transition whoosh: the engine mixes <project>/sfx/whoosh.mp3 on the video->image
+# cut. assets/whoosh_custom.* (gitignored) wins over the shipped assets/whoosh.mp3,
+# so a preferred sound can be dropped in without touching git.
+ASSETS_DIR = BASE_DIR / "assets"
+
+
+def _whoosh_asset() -> Path | None:
+    for name in ("whoosh_custom.mp3", "whoosh_custom.wav", "whoosh_custom.m4a", "whoosh.mp3"):
+        p = ASSETS_DIR / name
+        if p.exists():
+            return p
+    return None
+
 
 def _save_to_drive(src: Path) -> str:
     """Copy a finished video into DRIVE_OUT_DIR (e.g. Google Drive). Returns a
@@ -715,7 +728,7 @@ def api_music_list() -> list:
 def _create_settings_dict(voice_provider, voice_id, color_filter, intensity,
                           brightness, contrast, saturation, warmth,
                           music_name, music_volume, mute_original, music_loop,
-                          resolution, quality, transition) -> dict:
+                          resolution, quality, transition, whoosh=0) -> dict:
     return {
         "voice_provider": voice_provider, "voice_id": voice_id,
         "color_filter": color_filter or "",
@@ -723,6 +736,7 @@ def _create_settings_dict(voice_provider, voice_id, color_filter, intensity,
         "contrast": contrast, "saturation": saturation, "warmth": warmth,
         "music": music_name or "", "music_volume": music_volume,
         "mute_original": bool(mute_original), "music_loop": bool(music_loop),
+        "whoosh": bool(whoosh),
         "resolution": resolution, "quality": quality, "transition": transition,
     }
 
@@ -1098,6 +1112,8 @@ async def create_project(
     music_volume: float = Form(0.3),
     mute_original: int = Form(0),
     music_loop: int = Form(1),
+    whoosh: int = Form(0),
+    whoosh_volume: float = Form(0.55),
     files: list[UploadFile] = File(default=[]),
 ):
     """Create a project from pasted beats and uploaded clips/images.
@@ -1197,6 +1213,19 @@ async def create_project(
         "scenes": scenes,
     }
 
+    # Whoosh SFX: the engine mixes <project>/sfx/whoosh.mp3 on the video->image
+    # cut. Copy the shipped asset in when the toggle is on.
+    if whoosh:
+        _w = _whoosh_asset()
+        if _w:
+            sfx_dir = UPLOAD_DIR / project_id / "sfx"
+            sfx_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(_w, sfx_dir / "whoosh.mp3")
+        else:
+            whoosh = 0
+    project["whoosh"] = bool(whoosh)
+    project["whoosh_volume"] = whoosh_volume
+
     (UPLOAD_DIR / project_id / "project.json").write_text(
         json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -1205,7 +1234,7 @@ async def create_project(
     _save_create_defaults(_create_settings_dict(
         voice_provider, voice_id, color_filter, intensity, brightness,
         contrast, saturation, warmth, music_name, music_volume,
-        mute_original, music_loop, resolution, quality, transition))
+        mute_original, music_loop, resolution, quality, transition, whoosh))
 
     return {"project_id": project_id, "beats": len(beats), "media": media_saved}
 
@@ -1222,6 +1251,7 @@ def _build_project(project_id: str, title: str, beats: list[str],
                    warmth: float = 0.0,
                    music_name: str = "", music_volume: float = 0.3,
                    mute_original: int = 0, music_loop: int = 1,
+                   whoosh: int = 0, whoosh_volume: float = 0.55,
                    transition_seconds: float = 0.25, duration_padding: float = 0.12,
                    picture_cut_seconds: float = 0.0,
                    beat_seconds: float = 8.0,
@@ -1263,6 +1293,17 @@ def _build_project(project_id: str, title: str, beats: list[str],
                   "speed": narration_speed},
         "scenes": scenes,
     }
+    # Whoosh SFX on the video->image cut (see create_project).
+    if whoosh:
+        _w = _whoosh_asset()
+        if _w:
+            sfx_dir = UPLOAD_DIR / project_id / "sfx"
+            sfx_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(_w, sfx_dir / "whoosh.mp3")
+        else:
+            whoosh = 0
+    project["whoosh"] = bool(whoosh)
+    project["whoosh_volume"] = whoosh_volume
     (UPLOAD_DIR / project_id / "project.json").write_text(
         json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -1324,6 +1365,8 @@ async def create_batch(
     music_volume: float = Form(0.3),
     mute_original: int = Form(0),
     music_loop: int = Form(1),
+    whoosh: int = Form(0),
+    whoosh_volume: float = Form(0.55),
     source: str = Form(""),
     files: list[UploadFile] = File(default=[]),
 ):
@@ -1392,6 +1435,7 @@ async def create_batch(
                        resolution, quality, transition, clip_slice, color_filter,
                        intensity, brightness, contrast, saturation, warmth,
                        music_name, music_volume, mute_original, music_loop,
+                       whoosh=whoosh, whoosh_volume=whoosh_volume,
                        transition_seconds=transition_seconds,
                        duration_padding=duration_padding,
                        picture_cut_seconds=picture_cut_seconds,
@@ -1419,7 +1463,7 @@ async def create_batch(
     _save_create_defaults(_create_settings_dict(
         voice_provider, voice_id, color_filter, intensity, brightness,
         contrast, saturation, warmth, music_name, music_volume,
-        mute_original, music_loop, resolution, quality, transition))
+        mute_original, music_loop, resolution, quality, transition, whoosh))
 
     return {"documents": len(results), "total_beats": total_beats, "jobs": results}
 

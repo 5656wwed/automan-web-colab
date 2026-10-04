@@ -19,3 +19,6 @@ env/
 Thumbs.db
 
 *.bak
+
+# A preferred whoosh kept on this machine only (the shipped one is assets/whoosh.mp3)
+assets/whoosh_custom.*
