@@ -729,7 +729,8 @@ def _create_settings_dict(voice_provider, voice_id, color_filter, intensity,
                           brightness, contrast, saturation, warmth,
                           music_name, music_volume, mute_original, music_loop,
                           resolution, quality, transition, whoosh=0,
-                          whoosh_volume=0.55, motion_zoom=0.25, trim_voice_silence=1) -> dict:
+                          whoosh_volume=0.55, motion_zoom=0.25, trim_voice_silence=1,
+                          whoosh_mode="off") -> dict:
     return {
         "voice_provider": voice_provider, "voice_id": voice_id,
         "color_filter": color_filter or "",
@@ -737,7 +738,7 @@ def _create_settings_dict(voice_provider, voice_id, color_filter, intensity,
         "contrast": contrast, "saturation": saturation, "warmth": warmth,
         "music": music_name or "", "music_volume": music_volume,
         "mute_original": bool(mute_original), "music_loop": bool(music_loop),
-        "whoosh": bool(whoosh), "whoosh_volume": whoosh_volume,
+        "whoosh": bool(whoosh), "whoosh_volume": whoosh_volume, "whoosh_mode": whoosh_mode,
         "motion_zoom": motion_zoom,
         "trim_voice_silence": bool(trim_voice_silence),
         "resolution": resolution, "quality": quality, "transition": transition,
@@ -1117,6 +1118,7 @@ async def create_project(
     music_loop: int = Form(1),
     whoosh: int = Form(0),
     whoosh_volume: float = Form(0.55),
+    whoosh_mode: str = Form(""),
     motion_zoom: float = Form(0.25),
     trim_voice_silence: int = Form(1),
     files: list[UploadFile] = File(default=[]),
@@ -1218,17 +1220,21 @@ async def create_project(
         "scenes": scenes,
     }
 
-    # Whoosh SFX: the engine mixes <project>/sfx/whoosh.mp3 on the video->image
-    # cut. Copy the shipped asset in when the toggle is on.
-    if whoosh:
+    # Whoosh SFX: off / video_to_image / every_cut. The engine mixes
+    # <project>/sfx/whoosh.mp3 on the cuts the mode selects.
+    _wmode = (whoosh_mode or "").strip().lower()
+    if _wmode not in ("off", "video_to_image", "every_cut"):
+        _wmode = "video_to_image" if whoosh else "off"
+    if _wmode != "off":
         _w = _whoosh_asset()
         if _w:
             sfx_dir = UPLOAD_DIR / project_id / "sfx"
             sfx_dir.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(_w, sfx_dir / "whoosh.mp3")
         else:
-            whoosh = 0
-    project["whoosh"] = bool(whoosh)
+            _wmode = "off"
+    project["whoosh"] = _wmode != "off"
+    project["whoosh_mode"] = _wmode
     project["whoosh_volume"] = whoosh_volume
     project["motion_zoom"] = motion_zoom
     project["trim_voice_silence"] = bool(trim_voice_silence)
@@ -1242,7 +1248,7 @@ async def create_project(
         voice_provider, voice_id, color_filter, intensity, brightness,
         contrast, saturation, warmth, music_name, music_volume,
         mute_original, music_loop, resolution, quality, transition, whoosh,
-        whoosh_volume, motion_zoom, trim_voice_silence))
+        whoosh_volume, motion_zoom, trim_voice_silence, whoosh_mode))
 
     return {"project_id": project_id, "beats": len(beats), "media": media_saved}
 
@@ -1259,7 +1265,7 @@ def _build_project(project_id: str, title: str, beats: list[str],
                    warmth: float = 0.0,
                    music_name: str = "", music_volume: float = 0.3,
                    mute_original: int = 0, music_loop: int = 1,
-                   whoosh: int = 0, whoosh_volume: float = 0.55,
+                   whoosh: int = 0, whoosh_volume: float = 0.55, whoosh_mode: str = "",
                    motion_zoom: float = 0.25,
                    trim_voice_silence: int = 1,
                    transition_seconds: float = 0.25, duration_padding: float = 0.12,
@@ -1303,16 +1309,20 @@ def _build_project(project_id: str, title: str, beats: list[str],
                   "speed": narration_speed},
         "scenes": scenes,
     }
-    # Whoosh SFX on the video->image cut (see create_project).
-    if whoosh:
+    # Whoosh SFX on the cuts (see create_project for the mode rules).
+    _wmode = (whoosh_mode or "").strip().lower()
+    if _wmode not in ("off", "video_to_image", "every_cut"):
+        _wmode = "video_to_image" if whoosh else "off"
+    if _wmode != "off":
         _w = _whoosh_asset()
         if _w:
             sfx_dir = UPLOAD_DIR / project_id / "sfx"
             sfx_dir.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(_w, sfx_dir / "whoosh.mp3")
         else:
-            whoosh = 0
-    project["whoosh"] = bool(whoosh)
+            _wmode = "off"
+    project["whoosh"] = _wmode != "off"
+    project["whoosh_mode"] = _wmode
     project["whoosh_volume"] = whoosh_volume
     project["motion_zoom"] = motion_zoom
     project["trim_voice_silence"] = bool(trim_voice_silence)
@@ -1379,6 +1389,7 @@ async def create_batch(
     music_loop: int = Form(1),
     whoosh: int = Form(0),
     whoosh_volume: float = Form(0.55),
+    whoosh_mode: str = Form(""),
     motion_zoom: float = Form(0.25),
     trim_voice_silence: int = Form(1),
     source: str = Form(""),
@@ -1449,7 +1460,7 @@ async def create_batch(
                        resolution, quality, transition, clip_slice, color_filter,
                        intensity, brightness, contrast, saturation, warmth,
                        music_name, music_volume, mute_original, music_loop,
-                       whoosh=whoosh, whoosh_volume=whoosh_volume,
+                       whoosh=whoosh, whoosh_volume=whoosh_volume, whoosh_mode=whoosh_mode,
                        motion_zoom=motion_zoom,
                        trim_voice_silence=trim_voice_silence,
                        transition_seconds=transition_seconds,
@@ -1480,7 +1491,7 @@ async def create_batch(
         voice_provider, voice_id, color_filter, intensity, brightness,
         contrast, saturation, warmth, music_name, music_volume,
         mute_original, music_loop, resolution, quality, transition, whoosh,
-        whoosh_volume, motion_zoom, trim_voice_silence))
+        whoosh_volume, motion_zoom, trim_voice_silence, whoosh_mode))
 
     return {"documents": len(results), "total_beats": total_beats, "jobs": results}
 

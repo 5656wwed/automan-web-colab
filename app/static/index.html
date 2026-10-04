@@ -290,10 +290,12 @@
             <div><select id="musicSel"><option value="">No music</option></select></div>
             <div><label>Volume <span id="vMus" class="muted">30%</span></label><input type="range" id="fMus" min="0" max="100" value="30"></div>
             <div style="display:flex;align-items:center;min-width:200px"><label style="margin:0"><input type="checkbox" id="muteOrig" style="width:auto;margin-right:6px">Mute the clips' own sound</label></div>
-            <div style="display:flex;align-items:center;min-width:260px"><label style="margin:0" title="A short transition whoosh mixed at 0s on every cut from a video clip into a still image — it glues moving footage to your pictures"><input type="checkbox" id="whooshOn" style="width:auto;margin-right:6px">Whoosh on video → image cuts</label></div>
+            <div style="display:flex;align-items:center;min-width:300px"><label style="margin:0;margin-right:6px" title="A transition sound mixed at 0s on the cuts you choose. Video → image only: a beat whose picture is a still where the beat before it was a clip. Every cut: also between two stills, so image runs get the glue too.">Whoosh on cuts:</label>
+              <select id="whooshMode" style="max-width:200px"><option value="off" selected>Off</option><option value="video_to_image">Video → image only</option><option value="every_cut">Every cut</option></select>
+            </div>
             <div><label>Whoosh volume <span id="vWhoosh" class="muted">55%</span></label><input type="range" id="whooshVol" min="0" max="100" value="55"></div>
           </div>
-          <p class="hint" style="margin:6px 0 0">Whoosh fires only where a beat's picture is a still and the beat before it was a video clip. No whoosh between two stills.</p>
+          <p class="hint" style="margin:6px 0 0">The whoosh never plays on the first beat (there's no cut before it). Volume is how loud it sits under your voice.</p>
           <div class="flex" style="margin-top:8px;flex-wrap:wrap;gap:8px">
             <label style="margin:0;font-size:12px">Upload a track:</label>
             <input type="file" id="musicFile" accept=".mp3,.wav,.m4a,.aac,.ogg" style="max-width:280px;padding:6px">
@@ -633,7 +635,7 @@ async function doPreview(clip){
   fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
   if(clip){
     const mv=musicValues();
-    fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh); fd.append('whoosh_volume',mv.whVol);
+    fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh_mode',mv.whoosh); fd.append('whoosh', mv.whoosh!=='off'?1:0); fd.append('whoosh_volume',mv.whVol);
     fd.append('clip',1);
   }
   // NOTE: do NOT send a 'file' field here — the backend already falls back to the
@@ -667,7 +669,7 @@ async function loadMusic(){
   }catch(e){}
 }
 $('fMus').addEventListener('input', ()=> $('vMus').textContent=parseInt($('fMus').value)+'%');
-function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fMus').value)/100, mute:$('muteOrig').checked?1:0, loop:1, whoosh:$('whooshOn').checked?1:0, whVol:parseInt($('whooshVol').value)/100 }; }
+function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fMus').value)/100, mute:$('muteOrig').checked?1:0, loop:1, whoosh:$('whooshMode').value, whVol:parseInt($('whooshVol').value)/100 }; }
 
 /* ---------------- pace (picture time follows the voice) ---------------- */
 const PACE_PRESETS = {
@@ -749,7 +751,8 @@ function applySettingsToForm(s){
   if(s.music && $('musicSel').querySelector('option[value="'+s.music+'"]')) $('musicSel').value=s.music;
   if(s.music_volume!==undefined) $('fMus').value=Math.round(s.music_volume*100);
   if(s.mute_original!==undefined) $('muteOrig').checked=!!s.mute_original;
-  if(s.whoosh!==undefined) $('whooshOn').checked=!!s.whoosh;
+  if(s.whoosh_mode) $('whooshMode').value=s.whoosh_mode;
+  else if(s.whoosh) $('whooshMode').value='video_to_image';
   if(s.whoosh_volume!==undefined) $('whooshVol').value=Math.round(s.whoosh_volume*100);
   if(s.motion_zoom!==undefined) $('motionZoom').value=Math.round(s.motion_zoom*100);
   if(s.trim_voice_silence!==undefined) $('trimVoice').checked=!!s.trim_voice_silence;
@@ -1172,7 +1175,7 @@ $('go').onclick = async () => {
   fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
   fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
   const mv=musicValues();
-  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh); fd.append('whoosh_volume',mv.whVol);
+  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh_mode',mv.whoosh); fd.append('whoosh', mv.whoosh!=='off'?1:0); fd.append('whoosh_volume',mv.whVol);
   appendPace(fd);
   const btn=$('go'); btn.disabled=true; $('statusMsg').textContent='Creating project…';
   try{
@@ -1254,7 +1257,7 @@ $('goBatch').onclick = async () => {
   fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
   fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
   const mv=musicValues();
-  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh); fd.append('whoosh_volume',mv.whVol);
+  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh_mode',mv.whoosh); fd.append('whoosh', mv.whoosh!=='off'?1:0); fd.append('whoosh_volume',mv.whVol);
   appendPace(fd);
   fd.append('source','files');
   allFiles.forEach(f=>fd.append('files',f));
