@@ -730,7 +730,7 @@ def _create_settings_dict(voice_provider, voice_id, color_filter, intensity,
                           music_name, music_volume, mute_original, music_loop,
                           resolution, quality, transition, whoosh=0,
                           whoosh_volume=0.55, motion_zoom=0.25, trim_voice_silence=1,
-                          whoosh_mode="off") -> dict:
+                          whoosh_mode="off", short_clip_policy="slow") -> dict:
     return {
         "voice_provider": voice_provider, "voice_id": voice_id,
         "color_filter": color_filter or "",
@@ -741,6 +741,7 @@ def _create_settings_dict(voice_provider, voice_id, color_filter, intensity,
         "whoosh": bool(whoosh), "whoosh_volume": whoosh_volume, "whoosh_mode": whoosh_mode,
         "motion_zoom": motion_zoom,
         "trim_voice_silence": bool(trim_voice_silence),
+        "short_clip_policy": short_clip_policy or "slow",
         "resolution": resolution, "quality": quality, "transition": transition,
     }
 
@@ -1121,6 +1122,7 @@ async def create_project(
     whoosh_mode: str = Form(""),
     motion_zoom: float = Form(0.25),
     trim_voice_silence: int = Form(1),
+    short_clip_policy: str = Form("slow"),
     files: list[UploadFile] = File(default=[]),
 ):
     """Create a project from pasted beats and uploaded clips/images.
@@ -1238,6 +1240,7 @@ async def create_project(
     project["whoosh_volume"] = whoosh_volume
     project["motion_zoom"] = motion_zoom
     project["trim_voice_silence"] = bool(trim_voice_silence)
+    project["short_clip_policy"] = (short_clip_policy or "slow").strip().lower()
 
     (UPLOAD_DIR / project_id / "project.json").write_text(
         json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -1248,7 +1251,8 @@ async def create_project(
         voice_provider, voice_id, color_filter, intensity, brightness,
         contrast, saturation, warmth, music_name, music_volume,
         mute_original, music_loop, resolution, quality, transition, whoosh,
-        whoosh_volume, motion_zoom, trim_voice_silence, whoosh_mode))
+        whoosh_volume, motion_zoom, trim_voice_silence, whoosh_mode,
+        short_clip_policy))
 
     return {"project_id": project_id, "beats": len(beats), "media": media_saved}
 
@@ -1266,6 +1270,7 @@ def _build_project(project_id: str, title: str, beats: list[str],
                    music_name: str = "", music_volume: float = 0.3,
                    mute_original: int = 0, music_loop: int = 1,
                    whoosh: int = 0, whoosh_volume: float = 0.55, whoosh_mode: str = "",
+                   short_clip_policy: str = "slow",
                    motion_zoom: float = 0.25,
                    trim_voice_silence: int = 1,
                    transition_seconds: float = 0.25, duration_padding: float = 0.12,
@@ -1326,6 +1331,7 @@ def _build_project(project_id: str, title: str, beats: list[str],
     project["whoosh_volume"] = whoosh_volume
     project["motion_zoom"] = motion_zoom
     project["trim_voice_silence"] = bool(trim_voice_silence)
+    project["short_clip_policy"] = (short_clip_policy or "slow").strip().lower()
     (UPLOAD_DIR / project_id / "project.json").write_text(
         json.dumps(project, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -1392,6 +1398,7 @@ async def create_batch(
     whoosh_mode: str = Form(""),
     motion_zoom: float = Form(0.25),
     trim_voice_silence: int = Form(1),
+    short_clip_policy: str = Form("slow"),
     source: str = Form(""),
     files: list[UploadFile] = File(default=[]),
 ):
@@ -1461,6 +1468,7 @@ async def create_batch(
                        intensity, brightness, contrast, saturation, warmth,
                        music_name, music_volume, mute_original, music_loop,
                        whoosh=whoosh, whoosh_volume=whoosh_volume, whoosh_mode=whoosh_mode,
+                       short_clip_policy=short_clip_policy,
                        motion_zoom=motion_zoom,
                        trim_voice_silence=trim_voice_silence,
                        transition_seconds=transition_seconds,
@@ -1491,7 +1499,8 @@ async def create_batch(
         voice_provider, voice_id, color_filter, intensity, brightness,
         contrast, saturation, warmth, music_name, music_volume,
         mute_original, music_loop, resolution, quality, transition, whoosh,
-        whoosh_volume, motion_zoom, trim_voice_silence, whoosh_mode))
+        whoosh_volume, motion_zoom, trim_voice_silence, whoosh_mode,
+        short_clip_policy))
 
     return {"documents": len(results), "total_beats": total_beats, "jobs": results}
 

@@ -252,9 +252,12 @@
           <div><label>Image motion <span id="vMotion" class="muted">25%</span></label>
             <input type="range" id="motionZoom" min="0" max="40" value="25" title="How far each still moves (Ken Burns / zoom / pan). 0% = frozen picture, 25% = strong and attention-grabbing">
           </div>
+          <div><label title="What happens when a video clip is shorter than its beat. Slow it to fit: the clip plays slightly slower so it lasts the whole beat — it never repeats and never stops (default). Hold the last frame: the picture freezes at the end. Repeat the clip: it plays again from the start — that repeat is what makes a shot look like it came back right before the cut.">Clip shorter than its beat</label>
+            <select id="shortClip"><option value="slow" selected>Slow it to fit (no repeat)</option><option value="hold">Hold the last frame</option><option value="loop">Repeat the clip</option></select>
+          </div>
           <div style="display:flex;align-items:center;min-width:230px"><label style="margin:0" title="Removes the silence every TTS line comes with (about 0.35s at each end), so lines hand over to each other with only the Gap between them — the narration reads as one continuous script"><input type="checkbox" id="trimVoice" checked style="width:auto;margin-right:6px">Trim TTS dead air</label></div>
         </div>
-        <p class="hint" style="margin:2px 0 8px">Picture time follows the voice. <b>Minimum beat</b> = 8 s means a short line still fills a full beat; a longer line is never cut (0 lets every picture follow its own voice exactly). <b>Image motion</b> is the Ken Burns strength — 8% gentle, 15% medium, 25% strong, 0% frozen. <b>Pictures per beat</b> / <b>new picture every (s)</b> are free numbers — set either one, 0 turns it off: 2 per beat = Image A/B, 3 = thirds, or "every 2.5 s" to follow the beat's own length. <b>Gap</b> is the silence between lines: keep it tiny (0.05 s) so the narration runs continuously.</p>
+        <p class="hint" style="margin:2px 0 8px">Picture time follows the voice. <b>Minimum beat</b> = 8 s means a short line still fills a full beat; a longer line is never cut (0 lets every picture follow its own voice exactly). <b>Image motion</b> is the Ken Burns strength — 8% gentle, 15% medium, 25% strong, 0% frozen. <b>Clip shorter than its beat</b>: keep "Slow it to fit" so a clip fills its beat by playing a touch slower — "Repeat the clip" restarts it from the beginning, which looks like the shot came back. <b>Pictures per beat</b> / <b>new picture every (s)</b> are free numbers — set either one, 0 turns it off: 2 per beat = Image A/B, 3 = thirds, or "every 2.5 s" to follow the beat's own length. <b>Gap</b> is the silence between lines: keep it tiny (0.05 s) so the narration runs continuously.</p>
 
         <div class="row" style="margin-bottom:6px">
           <div><label>Resolution</label>
@@ -694,6 +697,7 @@ function paceValues(){
     transition_seconds: $('transitionSeconds').value || '0.4',
     motion_zoom: parseInt($('motionZoom').value)/100,
     trim_voice_silence: $('trimVoice').checked?1:0,
+    short_clip_policy: $('shortClip').value,
   };
 }
 function appendPace(fd){
@@ -756,6 +760,7 @@ function applySettingsToForm(s){
   if(s.whoosh_volume!==undefined) $('whooshVol').value=Math.round(s.whoosh_volume*100);
   if(s.motion_zoom!==undefined) $('motionZoom').value=Math.round(s.motion_zoom*100);
   if(s.trim_voice_silence!==undefined) $('trimVoice').checked=!!s.trim_voice_silence;
+  if(s.short_clip_policy && $('shortClip').querySelector('option[value="'+s.short_clip_policy+'"]')) $('shortClip').value=s.short_clip_policy;
   if(s.resolution) $('res').value=s.resolution;
   if(s.transition) $('transition').value=s.transition;
   updateSliderLabels(); $('vMus').textContent=parseInt($('fMus').value)+'%';
