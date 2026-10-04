@@ -1004,19 +1004,21 @@ _cleanup_thread.start()
 async def stage_upload(file: UploadFile = File(...), request: Request = None):
     """Upload a single clip into the staging area. Returns its index + filename."""
     require_auth(request)
-    ext = Path(file.filename or "clip").suffix.lower()
+    raw = Path(file.filename or "clip").name        # drop any client-side path
+    ext = Path(raw).suffix.lower()
     if ext not in ALLOWED_MEDIA:
         raise HTTPException(400, f"Unsupported file type: {ext}. Use mp4/mov/mkv/avi/webm/jpg/png.")
-    # Derive the slot from the clip's own embedded number (001, 2, 10) so a
-    # retry overwrites the same slot instead of creating a duplicate.
-    idx = re_search_num(file.filename or "")
-    if idx <= 0:
-        idx = len([p for p in STAGE_DIR.iterdir() if p.is_file()]) + 1
-    dest = STAGE_DIR / f"{idx:03d}{ext}"
+    # Stage under the ORIGINAL (sanitized) filename. The engine reads the beat out
+    # of the name — beat-3-image-a/b/c are three pictures of ONE beat — so the
+    # staged copy MUST keep it. Deriving the slot from the first number in the name
+    # made every file of the same beat overwrite the others (178 uploads landed as
+    # 70 slots; a 3-picture beat kept only its last picture).
+    # Same name re-sent (a retry) overwrites its own slot instead of duplicating.
+    dest = STAGE_DIR / _safe_media_name(raw)
     with dest.open("wb") as out:
         while chunk := await file.read(1024 * 1024):
             out.write(chunk)
-    return {"index": idx, "name": dest.name, "size": dest.stat().st_size}
+    return {"index": re_search_num(dest.name), "name": dest.name, "size": dest.stat().st_size}
 
 
 @app.get("/api/stage")

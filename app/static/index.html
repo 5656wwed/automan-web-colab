@@ -132,7 +132,7 @@
 
       <div class="card">
         <div class="stephead"><span class="stepnum">3</span><h2>Your clips / images</h2></div>
-        <p class="hint">Pick one clip (or image) for <b>each line</b>, in the same order. Line 1 → first clip, line 2 → second clip, and so on.</p>
+        <p class="hint">Pick one clip (or image) for <b>each line</b>, in the same order. Line 1 → first clip, line 2 → second clip. A line may take a <b>run of images</b> instead: <code>beat-3-image-a</code>, <code>-b</code>, <code>-c</code> are three pictures of that one beat.</p>
         <div class="drop" id="drop">Drop your video clips or images here<br>or <b>click to browse</b></div>
         <input type="file" id="files" accept="video/*,image/*" multiple hidden>
         <div id="uploadProgressWrap" style="display:none;margin-top:12px">
@@ -1024,11 +1024,12 @@ async function finishUpload(){
   // Confirm against the server (source of truth) and show the staged count.
   try{
     const r=await api('/api/stage'); const d=await r.json();
-    const n=(d.files||[]).length;
+    const names=(d.files||[]).map(f=>f.name);
+    const n=names.length, beats=countBeatGroups(names);
     $('statusMsg').textContent = n
-      ? `✅ ${n} clip(s) confirmed on server` + (n<uploadTotal?' — some failed, click ↻ Retry on red ones.':'')
+      ? `✅ ${n} file(s) on server = ${beats} beat(s)` + (n<uploadTotal?' — some failed, click ↻ Retry on red ones.':'')
       : 'No clips received — click ↻ Retry on red ones.';
-    $('stagedCount').textContent = n ? `📦 ${n} clip(s) staged on server` : '';
+    $('stagedCount').textContent = n ? `📦 ${n} file(s) = ${beats} beat(s) staged on server` : '';
   }catch(e){
     const got = selectedFiles.filter(Boolean).length;
     $('statusMsg').textContent = `✅ ${got} clip(s) done` + (got<uploadTotal?' (some failed, click ↻ Retry)':'');
@@ -1084,7 +1085,8 @@ $('downloadClipsBtn').onclick = ()=>{
 async function loadStagedCount(){
   try{
     const r=await api('/api/stage'); const d=await r.json(); const clips=(d.files||[]);
-    $('stagedCount').textContent = clips.length ? `📦 ${clips.length} clip(s) staged on server` : '';
+    const cbeats=countBeatGroups(clips.map(c=>c.name));
+    $('stagedCount').textContent = clips.length ? `📦 ${clips.length} file(s) = ${cbeats} beat(s) staged on server` : '';
     // Show the already-uploaded clips so the user doesn't think they need to re-upload.
     selectedFiles = clips.map(c=>c.name);
     if(clips.length){
@@ -1124,10 +1126,13 @@ $('clearStagedBtn').onclick = async ()=>{
 $('go').onclick = async () => {
   const lines=countLines($('script').value);
   if(!lines){ toast('Add your narration script in step 2 first.'); return; }
-  let staged=0;
-  try{ const r=await api('/api/stage'); const d=await r.json(); staged=(d.files||[]).length; }catch(e){}
-  if(staged < lines){ toast(`Need ${lines} clip(s) but only ${staged} staged. Upload more (or clear and re-upload).`); return; }
-  if(staged > lines){ toast(`You have ${staged} staged clips but only ${lines} scene(s). Click "🧹 Clear all clips" and upload exactly ${lines}.`); return; }
+  // Compare BEATS, not files: beat-3-image-a/b/c are ONE beat made of three files.
+  const need=countBeats($('script').value);
+  let stagedNames=[];
+  try{ const r=await api('/api/stage'); const d=await r.json(); stagedNames=(d.files||[]).map(f=>f.name); }catch(e){}
+  const staged=stagedNames.length, stagedBeats=countBeatGroups(stagedNames);
+  if(stagedBeats < need){ toast(`Your uploads cover ${stagedBeats} beat(s) but the script has ${need} beat(s). Upload the missing beats (or clear and re-upload).`); return; }
+  if(stagedBeats > need){ toast(`Your uploads cover ${stagedBeats} beats but the script has only ${need}. Click "🧹 Clear all clips" and upload exactly ${need} beats.`); return; }
   const fd = new FormData();
   fd.append('title', $('title').value || 'Untitled');
   fd.append('script', $('script').value);
