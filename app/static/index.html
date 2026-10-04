@@ -247,7 +247,7 @@
             <input id="pictureCut" type="number" step="0.1" min="0" max="30" value="4">
           </div>
           <div><label>Transition (s)</label>
-            <input id="transitionSeconds" type="number" step="0.05" min="0.1" max="3" value="0.2">
+            <input id="transitionSeconds" type="number" step="0.05" min="0.1" max="3" value="0.4">
           </div>
           <div><label>Image motion <span id="vMotion" class="muted">25%</span></label>
             <input type="range" id="motionZoom" min="0" max="40" value="25" title="How far each still moves (Ken Burns / zoom / pan). 0% = frozen picture, 25% = strong and attention-grabbing">
@@ -261,7 +261,7 @@
             <select id="res"><option value="1280x720" selected>720p — fast</option><option value="1920x1080">1080p — HD</option><option value="3840x2160">4K — huge</option></select>
           </div>
           <div><label>Transition</label>
-            <select id="transition"><option value="dip_to_black" selected>Dip to black — soft</option><option value="none">Hard cut (no blend)</option><option value="fade">Cross fade</option><option value="dissolve">Dissolve</option><option value="cross_zoom">Cross zoom</option></select>
+            <select id="transition"><option value="fade" selected>Fade — soft dissolve (documentary)</option><option value="dissolve">Dissolve</option><option value="none">Hard cut (no blend)</option></select>
           </div>
           <div><label>🎨 Color filter</label>
             <select id="colorFilter"><option value="">None (original)</option></select>
@@ -673,9 +673,9 @@ function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fM
 
 /* ---------------- pace (picture time follows the voice) ---------------- */
 const PACE_PRESETS = {
-  fast:   { speed:1.08, pad:0.05, beat:8, per:0, cut:4,   trans:0.2, zoom:25 },
-  normal: { speed:1.00, pad:0.05, beat:8, per:2, cut:0,   trans:0.2, zoom:15 },
-  slow:   { speed:0.95, pad:0.10, beat:0, per:0, cut:0,   trans:0.4, zoom:10 },
+  fast:   { speed:1.08, pad:0.05, beat:8, per:0, cut:4,   trans:0.4, zoom:25 },
+  normal: { speed:1.00, pad:0.05, beat:8, per:2, cut:0,   trans:0.5, zoom:15 },
+  slow:   { speed:0.95, pad:0.10, beat:0, per:0, cut:0,   trans:0.7, zoom:10 },
 };
 function applyPacePreset(name){
   const p = PACE_PRESETS[name]; if(!p) return;
@@ -691,7 +691,7 @@ function paceValues(){
     beat_seconds: $('beatSeconds').value || '0',
     pictures_per_beat: $('picturesPerBeat').value || '0',
     picture_cut_seconds: $('pictureCut').value || '0',
-    transition_seconds: $('transitionSeconds').value || '0.2',
+    transition_seconds: $('transitionSeconds').value || '0.4',
     motion_zoom: parseInt($('motionZoom').value)/100,
     trim_voice_silence: $('trimVoice').checked?1:0,
   };
