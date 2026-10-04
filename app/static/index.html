@@ -235,9 +235,9 @@
             <input id="narrationSpeed" type="number" step="0.01" min="0.5" max="2" value="1.08">
           </div>
           <div><label>Gap after each line (s)</label>
-            <input id="padSeconds" type="number" step="0.01" min="0" max="5" value="0.12">
+            <input id="padSeconds" type="number" step="0.01" min="0" max="5" value="0.05">
           </div>
-          <div><label>Beat length (s)</label>
+          <div><label>Minimum beat (s)</label>
             <input id="beatSeconds" type="number" step="0.1" min="0" max="60" value="8">
           </div>
           <div><label>Pictures per beat</label>
@@ -247,17 +247,21 @@
             <input id="pictureCut" type="number" step="0.1" min="0" max="30" value="4">
           </div>
           <div><label>Transition (s)</label>
-            <input id="transitionSeconds" type="number" step="0.05" min="0.1" max="3" value="0.25">
+            <input id="transitionSeconds" type="number" step="0.05" min="0.1" max="3" value="0.2">
           </div>
+          <div><label>Image motion <span id="vMotion" class="muted">25%</span></label>
+            <input type="range" id="motionZoom" min="0" max="40" value="25" title="How far each still moves (Ken Burns / zoom / pan). 0% = frozen picture, 25% = strong and attention-grabbing">
+          </div>
+          <div style="display:flex;align-items:center;min-width:230px"><label style="margin:0" title="Removes the silence every TTS line comes with (about 0.35s at each end), so lines hand over to each other with only the Gap between them — the narration reads as one continuous script"><input type="checkbox" id="trimVoice" checked style="width:auto;margin-right:6px">Trim TTS dead air</label></div>
         </div>
-        <p class="hint" style="margin:2px 0 8px">Picture time follows the voice. <b>Beat length</b> = 8 s locks every beat to the pipeline's 8-second unit (60 beats = 8:00; a short line holds its shot, a long line is never cut — 0 lets each picture follow its own voice). <b>Pictures per beat</b> and <b>new picture every (s)</b> are free numbers — set either one, 0 turns it off: 2 per beat = Image A/B, 3 = thirds, or "every 2.5 s" to let the count follow the beat's own length (up to 12). <b>Gap</b> is the only silence between lines (0.12 s = the cut lands right on the voice).</p>
+        <p class="hint" style="margin:2px 0 8px">Picture time follows the voice. <b>Minimum beat</b> = 8 s means a short line still fills a full beat; a longer line is never cut (0 lets every picture follow its own voice exactly). <b>Image motion</b> is the Ken Burns strength — 8% gentle, 15% medium, 25% strong, 0% frozen. <b>Pictures per beat</b> / <b>new picture every (s)</b> are free numbers — set either one, 0 turns it off: 2 per beat = Image A/B, 3 = thirds, or "every 2.5 s" to follow the beat's own length. <b>Gap</b> is the silence between lines: keep it tiny (0.05 s) so the narration runs continuously.</p>
 
         <div class="row" style="margin-bottom:6px">
           <div><label>Resolution</label>
             <select id="res"><option value="1280x720" selected>720p — fast</option><option value="1920x1080">1080p — HD</option><option value="3840x2160">4K — huge</option></select>
           </div>
           <div><label>Transition</label>
-            <select id="transition"><option value="fade" selected>Fade</option><option value="dissolve">Dissolve</option><option value="dip_to_black">Dip to black</option><option value="cross_zoom">Cross zoom</option><option value="none">None</option></select>
+            <select id="transition"><option value="dip_to_black" selected>Dip to black — soft</option><option value="none">Hard cut (no blend)</option><option value="fade">Cross fade</option><option value="dissolve">Dissolve</option><option value="cross_zoom">Cross zoom</option></select>
           </div>
           <div><label>🎨 Color filter</label>
             <select id="colorFilter"><option value="">None (original)</option></select>
@@ -276,7 +280,9 @@
           <div><label>Contrast <span id="vCon" class="muted">100%</span></label><input type="range" id="fCon" min="50" max="200" value="100"></div>
           <div><label>Saturation <span id="vSat" class="muted">100%</span></label><input type="range" id="fSat" min="0" max="300" value="100"></div>
           <div><label>Warmth <span id="vWar" class="muted">0</span></label><input type="range" id="fWar" min="-100" max="100" value="0"></div>
+          <div style="align-self:flex-end"><button class="btn-ghost" id="colorReset" style="padding:7px 12px">↺ Reset to original</button></div>
         </div>
+        <p class="hint" style="margin:2px 0 0">Source colour = Filter <b>None (original)</b>, Contrast <b>100%</b>, Saturation <b>100%</b>, Brightness <b>0</b>, Warmth <b>0</b>. Anything else is a look you chose — the render keeps the original colour until you move one of these.</p>
 
         <div style="margin-bottom:6px">
           <label>Background music</label>
@@ -285,6 +291,7 @@
             <div><label>Volume <span id="vMus" class="muted">30%</span></label><input type="range" id="fMus" min="0" max="100" value="30"></div>
             <div style="display:flex;align-items:center;min-width:200px"><label style="margin:0"><input type="checkbox" id="muteOrig" style="width:auto;margin-right:6px">Mute the clips' own sound</label></div>
             <div style="display:flex;align-items:center;min-width:260px"><label style="margin:0" title="A short transition whoosh mixed at 0s on every cut from a video clip into a still image — it glues moving footage to your pictures"><input type="checkbox" id="whooshOn" style="width:auto;margin-right:6px">Whoosh on video → image cuts</label></div>
+            <div><label>Whoosh volume <span id="vWhoosh" class="muted">55%</span></label><input type="range" id="whooshVol" min="0" max="100" value="55"></div>
           </div>
           <p class="hint" style="margin:6px 0 0">Whoosh fires only where a beat's picture is a still and the beat before it was a video clip. No whoosh between two stills.</p>
           <div class="flex" style="margin-top:8px;flex-wrap:wrap;gap:8px">
@@ -600,8 +607,16 @@ function updateSliderLabels(){
   $('vCon').textContent=parseInt($('fCon').value)+'%';
   $('vSat').textContent=parseInt($('fSat').value)+'%';
   $('vWar').textContent=parseInt($('fWar').value);
+  $('vMotion').textContent=parseInt($('motionZoom').value)+'%';
+  $('vWhoosh').textContent=parseInt($('whooshVol').value)+'%';
 }
 ['fInt','fBri','fCon','fSat','fWar'].forEach(id=>{ $(id).addEventListener('input', ()=>{ updateSliderLabels(); schedulePreview(); }); });
+['motionZoom','whooshVol'].forEach(id=>{ $(id).addEventListener('input', updateSliderLabels); });
+$('colorReset').onclick = ()=>{
+  $('colorFilter').value=''; $('fInt').value=100; $('fBri').value=0;
+  $('fCon').value=100; $('fSat').value=100; $('fWar').value=0;
+  updateSliderLabels(); schedulePreview();
+};
 $('colorFilter').addEventListener('change', schedulePreview);
 // Show a live preview automatically when the Advanced panel first opens.
 document.querySelector('#tabCreate details').addEventListener('toggle', ()=>{
@@ -618,7 +633,7 @@ async function doPreview(clip){
   fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
   if(clip){
     const mv=musicValues();
-    fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh);
+    fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh); fd.append('whoosh_volume',mv.whVol);
     fd.append('clip',1);
   }
   // NOTE: do NOT send a 'file' field here — the backend already falls back to the
@@ -652,19 +667,20 @@ async function loadMusic(){
   }catch(e){}
 }
 $('fMus').addEventListener('input', ()=> $('vMus').textContent=parseInt($('fMus').value)+'%');
-function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fMus').value)/100, mute:$('muteOrig').checked?1:0, loop:1, whoosh:$('whooshOn').checked?1:0 }; }
+function musicValues(){ return { name:$('musicSel').value, volume:parseInt($('fMus').value)/100, mute:$('muteOrig').checked?1:0, loop:1, whoosh:$('whooshOn').checked?1:0, whVol:parseInt($('whooshVol').value)/100 }; }
 
 /* ---------------- pace (picture time follows the voice) ---------------- */
 const PACE_PRESETS = {
-  fast:   { speed:1.08, pad:0.12, beat:8, per:0, cut:4,   trans:0.25 },
-  normal: { speed:1.00, pad:0.25, beat:8, per:2, cut:0,   trans:0.40 },
-  slow:   { speed:0.95, pad:0.50, beat:0, per:0, cut:0,   trans:0.60 },
+  fast:   { speed:1.08, pad:0.05, beat:8, per:0, cut:4,   trans:0.2, zoom:25 },
+  normal: { speed:1.00, pad:0.05, beat:8, per:2, cut:0,   trans:0.2, zoom:15 },
+  slow:   { speed:0.95, pad:0.10, beat:0, per:0, cut:0,   trans:0.4, zoom:10 },
 };
 function applyPacePreset(name){
   const p = PACE_PRESETS[name]; if(!p) return;
   $('narrationSpeed').value=p.speed; $('padSeconds').value=p.pad;
   $('beatSeconds').value=p.beat; $('picturesPerBeat').value=p.per;
   $('pictureCut').value=p.cut; $('transitionSeconds').value=p.trans;
+  if(p.zoom!==undefined){ $('motionZoom').value=p.zoom; updateSliderLabels(); }
 }
 function paceValues(){
   return {
@@ -673,7 +689,9 @@ function paceValues(){
     beat_seconds: $('beatSeconds').value || '0',
     pictures_per_beat: $('picturesPerBeat').value || '0',
     picture_cut_seconds: $('pictureCut').value || '0',
-    transition_seconds: $('transitionSeconds').value || '0.25',
+    transition_seconds: $('transitionSeconds').value || '0.2',
+    motion_zoom: parseInt($('motionZoom').value)/100,
+    trim_voice_silence: $('trimVoice').checked?1:0,
   };
 }
 function appendPace(fd){
@@ -732,6 +750,9 @@ function applySettingsToForm(s){
   if(s.music_volume!==undefined) $('fMus').value=Math.round(s.music_volume*100);
   if(s.mute_original!==undefined) $('muteOrig').checked=!!s.mute_original;
   if(s.whoosh!==undefined) $('whooshOn').checked=!!s.whoosh;
+  if(s.whoosh_volume!==undefined) $('whooshVol').value=Math.round(s.whoosh_volume*100);
+  if(s.motion_zoom!==undefined) $('motionZoom').value=Math.round(s.motion_zoom*100);
+  if(s.trim_voice_silence!==undefined) $('trimVoice').checked=!!s.trim_voice_silence;
   if(s.resolution) $('res').value=s.resolution;
   if(s.transition) $('transition').value=s.transition;
   updateSliderLabels(); $('vMus').textContent=parseInt($('fMus').value)+'%';
@@ -1151,7 +1172,7 @@ $('go').onclick = async () => {
   fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
   fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
   const mv=musicValues();
-  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh);
+  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh); fd.append('whoosh_volume',mv.whVol);
   appendPace(fd);
   const btn=$('go'); btn.disabled=true; $('statusMsg').textContent='Creating project…';
   try{
@@ -1233,7 +1254,7 @@ $('goBatch').onclick = async () => {
   fd.append('intensity',fv.intensity); fd.append('brightness',fv.brightness);
   fd.append('contrast',fv.contrast); fd.append('saturation',fv.saturation); fd.append('warmth',fv.warmth);
   const mv=musicValues();
-  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh);
+  fd.append('music_name',mv.name); fd.append('music_volume',mv.volume); fd.append('mute_original',mv.mute); fd.append('music_loop',mv.loop); fd.append('whoosh',mv.whoosh); fd.append('whoosh_volume',mv.whVol);
   appendPace(fd);
   fd.append('source','files');
   allFiles.forEach(f=>fd.append('files',f));
