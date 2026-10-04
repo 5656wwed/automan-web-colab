@@ -17,6 +17,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.request
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -622,6 +623,79 @@ ENGINE_CONFIG_PATH = _engine_config_path()
 LEGACY_CONFIG_PATH = Path.home() / ".config" / "AutoSceneStudio" / "settings.json"
 
 
+def _read_engine_config() -> dict:
+    """Merge the engine config with the legacy copy (newest wins per key)."""
+    data: dict = {}
+    for src in (LEGACY_CONFIG_PATH, ENGINE_CONFIG_PATH):
+        if src.exists():
+            try:
+                data.update(json.loads(src.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+    return data
+
+
+def _write_engine_config(data: dict) -> None:
+    """Write the engine config to the path the engine reads, mirroring the rest."""
+    ENGINE_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ENGINE_CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    if LEGACY_CONFIG_PATH.resolve() != ENGINE_CONFIG_PATH.resolve():
+        with contextlib.suppress(Exception):
+            LEGACY_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+            LEGACY_CONFIG_PATH.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _fish_voice_id(value: str) -> str:
+    """Take a fish.audio link (…/m/<id>) or a bare model id and return the id."""
+    m = re.search(r"([0-9a-f]{32})", (value or "").strip(), re.I)
+    return m.group(1).lower() if m else ""
+
+
+def _fish_voice_title(vid: str, data: "dict | None" = None) -> str:
+    """Ask Fish Audio what this voice is called (best effort, never fatal)."""
+    try:
+        key = (data or _read_engine_config()).get("fish_audio_api_key", "")
+        req = urllib.request.Request(f"https://api.fish.audio/model/{vid}",
+                                     headers={"Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return (json.load(r).get("title") or "").strip()[:80]
+    except Exception:
+        return ""
+
+
+@app.put("/api/fish/voice")
+def api_fish_add_voice(body: dict, request: Request):
+    """Add a Fish Audio voice (public link or id) to the narrator list.
+
+    Stored as `fish_extra_voices` in the ENGINE config, so the engine's own voice
+    listing includes it and it shows up in the dropdown on every build.
+    """
+    require_auth(request)
+    vid = _fish_voice_id((body or {}).get("value", ""))
+    if not vid:
+        raise HTTPException(400, "Paste the fish.audio voice link or its 32-character id.")
+    data = _read_engine_config()
+    extras = [str(x) for x in (data.get("fish_extra_voices") or [])]
+    if vid not in extras:
+        extras.append(vid)
+    data["fish_extra_voices"] = extras
+    _write_engine_config(data)
+    return {"added": vid, "name": _fish_voice_title(vid, data), "extras": extras}
+
+
+@app.delete("/api/fish/voice/{voice_id}")
+def api_fish_remove_voice(voice_id: str, request: Request):
+    """Drop an added Fish voice (your own account voices are never touched)."""
+    require_auth(request)
+    data = _read_engine_config()
+    extras = [str(x) for x in (data.get("fish_extra_voices") or [])
+              if str(x).lower() != (voice_id or "").lower()]
+    data["fish_extra_voices"] = extras
+    _write_engine_config(data)
+    return {"extras": extras}
+
+
 @app.get("/api/fish/config")
 def api_fish_config(request: Request):
     """Report whether a Fish Audio key is set and list available Fish voices."""
@@ -648,22 +722,10 @@ def api_fish_set_key(body: dict, request: Request):
     require_auth(request)
     key = (body or {}).get("api_key", "").strip()
     path = ENGINE_CONFIG_PATH
-    data: dict = {}
-    for src in (path, LEGACY_CONFIG_PATH):
-        if src.exists():
-            try:
-                data.update(json.loads(src.read_text(encoding="utf-8")))
-            except Exception:
-                pass
+    data = _read_engine_config()
     if key:
         data["fish_audio_api_key"] = key
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    if LEGACY_CONFIG_PATH.resolve() != path.resolve():
-        with contextlib.suppress(Exception):
-            LEGACY_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-            LEGACY_CONFIG_PATH.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_engine_config(data)
 
     # Prove it: the same check the Settings badge shows.
     key_set, voices, err = False, 0, ""
@@ -679,7 +741,6 @@ def api_fish_set_key(body: dict, request: Request):
         err = str(e)[:200]
     return {"saved": bool(data.get("fish_audio_api_key")), "key_set": key_set,
             "voices": voices, "config_path": str(path), "error": err}
-
 
 @app.post("/api/clone")
 async def api_clone_voice(request: Request, name: str = Form(...), file: UploadFile = File(...)):

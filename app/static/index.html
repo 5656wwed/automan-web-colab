@@ -417,6 +417,15 @@
         <div style="display:flex;align-items:center;min-width:220px"><label style="margin:0"><span id="fishKeyStatus" class="muted"></span></label></div>
       </div>
       <p class="hint" style="margin-top:8px">Get your key from fish.audio → API Keys. Once saved, your Fish Audio voices appear in the narrator dropdown.</p>
+      <div class="row" style="margin-top:8px">
+        <div><label>Add a Fish voice (paste its fish.audio link or id)</label>
+          <input type="text" id="fishVoiceUrl" placeholder="https://fish.audio/m/… or a 32-character id">
+        </div>
+        <div style="display:flex;align-items:flex-end;min-width:190px">
+          <button class="btn-ghost" id="addFishVoice" style="width:100%">➕ Add voice</button>
+        </div>
+      </div>
+      <div id="fishExtras" class="muted" style="margin-top:6px"></div>
       <div class="flex" style="margin-top:10px">
         <button class="btn-green" id="saveFishKey">💾 Save Fish Audio key</button>
         <button class="btn-ghost" id="refreshFishVoices" style="padding:11px 18px">🔄 Refresh voices</button>
@@ -552,16 +561,34 @@ function loadKokoroVoices(){
 }
 
 let fishVoicesList=[];
+function renderFishExtras(extras){
+  const box=$('fishExtras'); if(!box) return;
+  extras = extras||[];
+  if(!extras.length){ box.innerHTML=''; return; }
+  box.innerHTML = 'Added voices: ' + extras.map(id=>{
+    const v=(fishVoicesList||[]).find(x=>String(x.id).toLowerCase()===String(id).toLowerCase());
+    const nm=(v&&v.name)?v.name:id;
+    return '<span style="display:inline-block;background:#1b2430;border:1px solid #2c3a4a;border-radius:12px;padding:2px 8px;margin:2px 6px 2px 0">'
+      + nm.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))
+      + ' <a href="#" data-id="'+id+'" class="rmFishVoice" title="Remove" style="color:#ff8a8a;text-decoration:none">✕</a></span>';
+  }).join('');
+  box.querySelectorAll('.rmFishVoice').forEach(a=>a.onclick=async ev=>{
+    ev.preventDefault();
+    try{ await api('/api/fish/voice/'+a.dataset.id,{method:'DELETE'});
+      $('fishMsg').textContent='Removed.'; await loadFishVoices(); }catch(e){}
+  });
+}
 async function loadFishVoices(){
   const sel=$('fishVoice'); const cur=sel.value;
   sel.innerHTML='<option value="">Loading…</option>';
   try{
     const r=await api('/api/fish/config'); const d=await r.json();
     fishVoicesList = d.voices || [];
+    renderFishExtras(d.extras);
     if($('fishKeyStatus')) $('fishKeyStatus').textContent = d.has_key ? '✅ Fish Audio key set' : 'No Fish Audio key yet — add one in Settings.';
     sel.innerHTML='';
     if(d.has_key && fishVoicesList.length){
-      fishVoicesList.forEach(v=>{ const o=document.createElement('option'); o.value=v.id; o.textContent=(v.is_clone?'⭐ ':'')+v.name; sel.appendChild(o); });
+      fishVoicesList.forEach(v=>{ const o=document.createElement('option'); o.value=v.id; o.textContent=(v.is_clone?'⭐ ':'')+v.name+(v.added?' (added)':''); sel.appendChild(o); });
     } else {
       sel.innerHTML='<option value="">'+(d.has_key?'No voices found — create one in Fish Audio → My Voices':'Add your Fish Audio key in Settings first')+'</option>';
     }
@@ -1399,6 +1426,19 @@ $('saveFishKey').onclick = async ()=>{
     }
     $('setFishKey').value='';
     await loadFishKeyStatus(); await loadFishVoices();
+  }catch(e){ $('fishMsg').textContent='Error: '+e; }
+};
+$('addFishVoice').onclick = async ()=>{
+  const v=$('fishVoiceUrl').value.trim();
+  if(!v){ $('fishMsg').textContent='Paste the fish.audio voice link or its id first.'; return; }
+  $('fishMsg').textContent='Adding…';
+  try{
+    const r=await api('/api/fish/voice',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({value:v})});
+    const d=await r.json();
+    if(!r.ok){ $('fishMsg').textContent=(d.detail||'Could not add that voice.'); return; }
+    $('fishMsg').textContent='✅ Added '+(d.name||d.added)+' — pick it under Narrator voice → Fish Audio.';
+    $('fishVoiceUrl').value='';
+    await loadFishVoices();
   }catch(e){ $('fishMsg').textContent='Error: '+e; }
 };
 $('refreshFishVoices').onclick = async ()=>{
