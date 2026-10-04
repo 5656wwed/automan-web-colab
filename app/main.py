@@ -37,6 +37,12 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 JOBS_DIR.mkdir(parents=True, exist_ok=True)
 STAGE_DIR.mkdir(parents=True, exist_ok=True)
 
+# Which build this server is: shown as a chip in the dashboard header and returned
+# by /health, so a tunnel can be identified at a glance (the user runs two builds
+# off this repo — this one is the IMAGE + VIDEO build; the frozen 8s all-video
+# build is AutoScene-GPU.ipynb, pinned to a tag).
+BUILD = "image-video-v9"
+
 # The theautoman engine lives in a sibling checkout.
 THEAUTOMAN_DIR = Path(os.environ.get("THEAUTOMAN_DIR", "/home/ubuntu/theautoman"))
 PYTHON = Path(os.environ.get("THEAUTOMAN_PYTHON", str(THEAUTOMAN_DIR / "venv" / "bin" / "python")))
@@ -348,7 +354,7 @@ def index() -> FileResponse:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "engine": str(THEAUTOMAN_DIR), "jobs": len(JOBS)}
+    return {"status": "ok", "engine": str(THEAUTOMAN_DIR), "jobs": len(JOBS), "build": BUILD}
 
 
 # ---------------------------------------------------------------------------
