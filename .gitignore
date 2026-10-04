@@ -6,6 +6,7 @@ sessions.json
 uploads/
 jobs/
 stage/
+logs/
 
 # Python
 __pycache__/
