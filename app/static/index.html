@@ -574,6 +574,7 @@ function renderFishExtras(extras){
   }).join('');
   box.querySelectorAll('.rmFishVoice').forEach(a=>a.onclick=async ev=>{
     ev.preventDefault();
+    if(!confirm('Remove this added voice? It will disappear from the narrator list until you add the link/id again.')) return;
     try{ await api('/api/fish/voice/'+a.dataset.id,{method:'DELETE'});
       $('fishMsg').textContent='Removed.'; await loadFishVoices(); }catch(e){}
   });
