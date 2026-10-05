@@ -1749,7 +1749,9 @@ def _run_render(job_id: str, project_id: str):
                 cmd, stdout=lf, stderr=subprocess.STDOUT,
                 text=True, cwd=str(THEAUTOMAN_DIR),
             )
-            proc.wait(timeout=7200)
+            # 6 h: a 68-scene render on the free Fish model runs ~90 s/scene
+            # (~1.7 h) and must not be killed by a 2 h cap mid-render
+            proc.wait(timeout=21600)
         _parse_progress(j)
         j["log"].extend(_tail_log(log_path, 80))
         if proc.returncode != 0:
